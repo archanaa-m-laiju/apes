@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth.models import User
 
 from .models import Abstract, CoordinatorApproval, Group, GroupMember, GroupRequest, GuideRequest, Notification, StudentProfile, FacultyProfile, SustainableDevelopmentGoal, GroupEvaluation, EvaluationFile, StudentEvaluation, Class, CoordinatorAssignment, ProjectReport
 
@@ -9,6 +11,31 @@ class ClassAdmin(admin.ModelAdmin):
 	search_fields = ("name", "department")
 	list_filter = ("department",)
 	ordering = ("department", "name")
+
+
+try:
+	admin.site.unregister(User)
+except admin.sites.NotRegistered:
+	pass
+
+
+@admin.register(User)
+class CustomUserAdmin(BaseUserAdmin):
+	list_display = ("username", "email", "first_name", "last_name", "is_staff", "is_active")
+	search_fields = ("username", "email", "first_name", "last_name")
+	list_filter = ("is_staff", "is_active", "is_superuser")
+	ordering = ("username",)
+	fieldsets = (
+		(None, {"fields": ("username", "password")} ),
+		("Personal info", {"fields": ("first_name", "last_name", "email")} ),
+		("Permissions", {"fields": ("is_active", "is_staff", "is_superuser")} ),
+	)
+	add_fieldsets = (
+		(None, {
+			"classes": ("wide",),
+			"fields": ("username", "email", "password1", "password2", "is_active", "is_staff", "is_superuser"),
+		}),
+	)
 
 
 @admin.register(CoordinatorAssignment)
@@ -25,8 +52,8 @@ class CoordinatorAssignmentAdmin(admin.ModelAdmin):
 
 @admin.register(StudentProfile)
 class StudentProfileAdmin(admin.ModelAdmin):
-	list_display = ("user", "student_class", "roll_number", "register_number", "department", "cgp")
-	search_fields = ("user__username", "user__email", "user__first_name", "user__last_name", "roll_number", "register_number")
+	list_display = ("user", "student_class", "department", "cgp")
+	search_fields = ("user__username", "user__email", "user__first_name", "user__last_name", "roll_number")
 	list_filter = ("department", "student_class")
 	ordering = ("user__username",)
 	fieldsets = (
@@ -34,7 +61,7 @@ class StudentProfileAdmin(admin.ModelAdmin):
 			"fields": ("user",)
 		}),
 		("Academic Details", {
-			"fields": ("student_class", "roll_number", "register_number", "department", "cgp")
+			"fields": ("student_class", "roll_number", "department", "cgp")
 		}),
 	)
 
@@ -63,6 +90,7 @@ class FacultyProfileAdmin(admin.ModelAdmin):
 class GroupAdmin(admin.ModelAdmin):
 	list_display = ("id", "leader", "created_at")
 	search_fields = ("leader__username", "leader__email")
+	list_filter = ("created_at",)
 	ordering = ("-created_at",)
 
 
@@ -126,9 +154,9 @@ class NotificationAdmin(admin.ModelAdmin):
 
 @admin.register(GroupEvaluation)
 class GroupEvaluationAdmin(admin.ModelAdmin):
-	list_display = ("group", "stage", "guide_submitted", "coordinator_submitted", "is_completed", "created_at")
+	list_display = ("group", "stage", "guide_submitted", "coordinator1_submitted", "coordinator2_submitted", "is_completed", "created_at")
 	search_fields = ("group__leader__username",)
-	list_filter = ("stage", "guide_submitted", "coordinator_submitted", "created_at")
+	list_filter = ("stage", "guide_submitted", "coordinator1_submitted", "coordinator2_submitted", "created_at")
 	ordering = ("group", "stage")
 	readonly_fields = ("created_at", "updated_at")
 	fieldsets = (
@@ -139,7 +167,7 @@ class GroupEvaluationAdmin(admin.ModelAdmin):
 			"fields": ("guide_technical_exposure", "guide_socially_relevant", "guide_product_based", "guide_research_oriented", "guide_review", "guide_submitted")
 		}),
 		("Coordinator Evaluation", {
-			"fields": ("coordinator_technical_exposure", "coordinator_socially_relevant", "coordinator_product_based", "coordinator_research_oriented", "coordinator_review", "coordinator_submitted")
+			"fields": ("coordinator1_technical_exposure", "coordinator1_socially_relevant", "coordinator1_product_based", "coordinator1_research_oriented", "coordinator1_review", "coordinator1_submitted", "coordinator2_technical_exposure", "coordinator2_socially_relevant", "coordinator2_product_based", "coordinator2_research_oriented", "coordinator2_review", "coordinator2_submitted")
 		}),
 		("Timestamps", {
 			"fields": ("created_at", "updated_at")
@@ -184,9 +212,9 @@ class ProjectReportAdmin(admin.ModelAdmin):
 
 @admin.register(StudentEvaluation)
 class StudentEvaluationAdmin(admin.ModelAdmin):
-	list_display = ("student", "group", "stage", "guide_submitted", "coordinator_submitted", "finalized", "guide_total", "coordinator_total")
+	list_display = ("student", "group", "stage", "guide_submitted", "coordinator1_submitted", "coordinator2_submitted", "finalized")
 	search_fields = ("student__username", "group__leader__username")
-	list_filter = ("stage", "guide_submitted", "coordinator_submitted", "finalized", "created_at")
+	list_filter = ("stage", "guide_submitted", "coordinator1_submitted", "coordinator2_submitted", "finalized")
 	ordering = ("group", "stage", "student")
 	readonly_fields = ("created_at", "updated_at", "guide_total", "coordinator_total")
 	fieldsets = (
@@ -200,11 +228,18 @@ class StudentEvaluationAdmin(admin.ModelAdmin):
 				"guide_presentation", "guide_viva", "guide_submitted"
 			)
 		}),
-		("Coordinator Marks", {
+		("Coordinator 1 Marks", {
 			"fields": (
-				"coordinator_topic", "coordinator_planning", "coordinator_scalability", "coordinator_novelty",
-				"coordinator_task_distribution", "coordinator_schedule", "coordinator_interim",
-				"coordinator_presentation", "coordinator_viva", "coordinator_submitted"
+				"coordinator1_topic", "coordinator1_planning", "coordinator1_scalability", "coordinator1_novelty",
+				"coordinator1_task_distribution", "coordinator1_schedule", "coordinator1_interim",
+				"coordinator1_presentation", "coordinator1_viva", "coordinator1_submitted"
+			)
+		}),
+		("Coordinator 2 Marks", {
+			"fields": (
+				"coordinator2_topic", "coordinator2_planning", "coordinator2_scalability", "coordinator2_novelty",
+				"coordinator2_task_distribution", "coordinator2_schedule", "coordinator2_interim",
+				"coordinator2_presentation", "coordinator2_viva", "coordinator2_submitted"
 			)
 		}),
 		("Status", {
