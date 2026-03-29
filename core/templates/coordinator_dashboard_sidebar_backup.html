@@ -1,0 +1,1037 @@
+{% extends "base.html" %}
+{% load custom_filters %}
+
+{% block content %}
+<style>
+    /* Hide the base navbar on this page */
+    .navbar {
+        display: none !important;
+    }
+
+    body {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        min-height: 100vh;
+        margin: 0;
+        padding: 0;
+    }
+
+    .dashboard-container {
+        display: flex;
+        min-height: 100vh;
+        margin: 0;
+        padding: 0;
+    }
+
+    /* Sidebar Styles */
+    .sidebar {
+        width: 260px;
+        background: linear-gradient(180deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%);
+        backdrop-filter: blur(20px);
+        border-right: 1px solid rgba(148, 163, 184, 0.1);
+        padding: 0;
+        position: fixed;
+        height: 100vh;
+        left: 0;
+        top: 0;
+        overflow-y: auto;
+        z-index: 1000;
+        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+    }
+
+    .sidebar-header {
+        padding: 1.5rem;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+        background: rgba(99, 102, 241, 0.1);
+    }
+
+    .sidebar-header h4 {
+        color: #e5e7eb;
+        font-size: 1.3rem;
+        font-weight: 700;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .sidebar-user-info {
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+        background: rgba(255, 255, 255, 0.02);
+    }
+
+    .sidebar-user-info p {
+        margin: 0.25rem 0;
+        color: #9ca3af;
+        font-size: 0.875rem;
+    }
+
+    .sidebar-user-info strong {
+        color: #e5e7eb;
+    }
+
+    .sidebar-menu {
+        list-style: none;
+        padding: 1rem 0;
+        margin: 0;
+    }
+
+    .sidebar-menu li {
+        margin: 0;
+    }
+
+    .sidebar-menu .tab-link {
+        display: block;
+        padding: 0.875rem 1.5rem;
+        color: #cbd5e1;
+        text-decoration: none;
+        transition: all 0.2s ease;
+        border-left: 3px solid transparent;
+        font-weight: 500;
+    }
+
+    .sidebar-menu .tab-link:hover {
+        background: rgba(99, 102, 241, 0.1);
+        color: #e5e7eb;
+        border-left-color: rgba(99, 102, 241, 0.5);
+    }
+
+    .sidebar-menu .tab-link.active {
+        background: linear-gradient(90deg, rgba(99, 102, 241, 0.2) 0%, transparent 100%);
+        color: #a5b4fc;
+        border-left-color: #6366f1;
+        font-weight: 600;
+    }
+
+    .sidebar-footer {
+        position: absolute;
+        bottom: 0;
+        width: 100%;
+        padding: 1rem 1.5rem;
+        border-top: 1px solid rgba(148, 163, 184, 0.1);
+        background: rgba(15, 23, 42, 0.8);
+    }
+
+    .sidebar-footer .btn {
+        width: 100%;
+        margin-bottom: 0.5rem;
+        font-size: 0.875rem;
+        padding: 0.5rem;
+        border-radius: 6px;
+        transition: all 0.2s ease;
+    }
+
+    .btn-profile {
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        color: #93c5fd;
+    }
+
+    .btn-profile:hover {
+        background: rgba(59, 130, 246, 0.2);
+        color: #bfdbfe;
+        transform: translateY(-1px);
+    }
+
+    .btn-logout {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: #fca5a5;
+    }
+
+    .btn-logout:hover {
+        background: rgba(239, 68, 68, 0.2);
+        color: #fecaca;
+        transform: translateY(-1px);
+    }
+
+    /* Main Content Area */
+    .main-content {
+        margin-left: 260px;
+        flex: 1;
+        padding: 2rem;
+        min-height: 100vh;
+    }
+
+    .content-header {
+        margin-bottom: 2rem;
+    }
+
+    .content-header h3 {
+        color: #e5e7eb;
+        font-weight: 700;
+        font-size: 1.8rem;
+        margin: 0;
+    }
+
+    /* Tab Content */
+    .tab-content {
+        display: none;
+    }
+
+    .tab-content.active {
+        display: block;
+        animation: fadeIn 0.3s ease-in;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Card Styles */
+    .coordinator-card {
+        background: rgba(255, 255, 255, 0.06);
+        backdrop-filter: blur(40px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        transition: all 0.3s ease;
+    }
+
+    .coordinator-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+        border-color: rgba(99, 102, 241, 0.4);
+    }
+
+    .coordinator-card h5,
+    .coordinator-card h6 {
+        color: #e5e7eb;
+        font-weight: 600;
+    }
+
+    .coordinator-card p {
+        color: #9ca3af;
+    }
+
+    /* Table Styles */
+    .table-glass {
+        color: #e5e7eb;
+        background: transparent;
+    }
+
+    .table-glass thead {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .table-glass thead th {
+        color: #f3f4f6;
+        font-weight: 600;
+        border: none;
+        background: transparent;
+    }
+
+    .table-glass tbody tr {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        background: transparent;
+    }
+
+    .table-glass tbody td {
+        color: #e5e7eb;
+        border: none;
+        background: transparent;
+    }
+
+    /* Accordion Styles */
+    .accordion-button {
+        color: #e5e7eb !important;
+        background: transparent !important;
+    }
+
+    .accordion-button:not(.collapsed) {
+        background: rgba(99, 102, 241, 0.1) !important;
+        color: #a5b4fc !important;
+    }
+
+    .accordion-body {
+        background: rgba(255, 255, 255, 0.02);
+    }
+
+    .accordion-item {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    /* Badge Styles */
+    .badge {
+        padding: 0.35rem 0.75rem;
+        font-weight: 500;
+        border-radius: 6px;
+    }
+
+    .badge-success {
+        background: rgba(34, 197, 94, 0.2);
+        color: #86efac;
+        border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .badge-warning {
+        background: rgba(251, 191, 36, 0.2);
+        color: #fbbf24;
+        border: 1px solid rgba(251, 191, 36, 0.3);
+    }
+
+    .badge-danger {
+        background: rgba(239, 68, 68, 0.2);
+        color: #fca5a5;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .badge-info {
+        background: rgba(59, 130, 246, 0.2);
+        color: #93c5fd;
+        border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    .badge-secondary {
+        background: rgba(107, 114, 128, 0.2);
+        color: #d1d5db;
+        border: 1px solid rgba(107, 114, 128, 0.3);
+    }
+
+    /* Alert Styles */
+    .alert {
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .alert-success {
+        background: rgba(34, 197, 94, 0.1);
+        border: 1px solid rgba(34, 197, 94, 0.3);
+        color: #86efac;
+    }
+
+    .alert-warning {
+        background: rgba(251, 191, 36, 0.1);
+        border: 1px solid rgba(251, 191, 36, 0.3);
+        color: #fbbf24;
+    }
+
+    /* Form Styles */
+    .form-control {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #e5e7eb;
+        border-radius: 6px;
+    }
+
+    .form-control:focus {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(99, 102, 241, 0.5);
+        color: #e5e7eb;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    .form-check-input {
+        background-color: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .form-check-input:checked {
+        background-color: #6366f1;
+        border-color: #6366f1;
+    }
+
+    .form-check-label {
+        color: #e5e7eb;
+    }
+
+    /* Button Styles */
+    .btn {
+        border-radius: 6px;
+        font-weight: 500;
+        padding: 0.5rem 1rem;
+        transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn-success {
+        background: rgba(34, 197, 94, 0.2);
+        border: 1px solid rgba(34, 197, 94, 0.4);
+        color: #86efac;
+    }
+
+    .btn-success:hover {
+        background: rgba(34, 197, 94, 0.3);
+        color: #86efac;
+    }
+
+    .btn-danger {
+        background: rgba(239, 68, 68, 0.2);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        color: #fca5a5;
+    }
+
+    .btn-danger:hover {
+        background: rgba(239, 68, 68, 0.3);
+        color: #fca5a5;
+    }
+
+    .btn-warning {
+        background: rgba(251, 191, 36, 0.2);
+        border: 1px solid rgba(251, 191, 36, 0.4);
+        color: #fbbf24;
+    }
+
+    .btn-warning:hover {
+        background: rgba(251, 191, 36, 0.3);
+        color: #fbbf24;
+    }
+
+    .btn-info {
+        background: rgba(59, 130, 246, 0.2);
+        border: 1px solid rgba(59, 130, 246, 0.4);
+        color: #93c5fd;
+    }
+
+    .btn-info:hover {
+        background: rgba(59, 130, 246, 0.3);
+        color: #93c5fd;
+    }
+
+    .btn-outline-secondary {
+        background: rgba(107, 114, 128, 0.1);
+        border: 1px solid rgba(107, 114, 128, 0.4);
+        color: #d1d5db;
+    }
+
+    .btn-outline-secondary:hover {
+        background: rgba(107, 114, 128, 0.2);
+        color: #d1d5db;
+    }
+</style>
+
+<div class="dashboard-container">
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h4>📊 Coordinator Panel</h4>
+        </div>
+
+        <div class="sidebar-user-info">
+            <p><strong>{{ request.user.get_full_name|default:request.user.username }}</strong></p>
+            <p style="font-size: 0.75rem; color: #6b7280;">Coordinator</p>
+            {% if assigned_classes %}
+            <p style="margin-top: 0.5rem;"><strong>Classes:</strong> {{ assigned_classes|join:", " }}</p>
+            {% endif %}
+        </div>
+
+        <ul class="sidebar-menu">
+            <li><a href="#" class="tab-link active" data-tab="groups">👥 My Groups</a></li>
+            <li><a href="#" class="tab-link" data-tab="approvals">📋 Approvals</a></li>
+            <li><a href="#" class="tab-link" data-tab="topics">📝 Topic Approvals</a></li>
+        </ul>
+
+        <div class="sidebar-footer">
+            <a href="{% url 'profile' %}" class="btn btn-profile">
+                <svg style="width: 16px; height: 16px; display: inline; margin-right: 4px;" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/>
+                </svg>
+                Profile
+            </a>
+            <form method="post" action="{% url 'logout' %}" style="margin: 0;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-logout">
+                    <svg style="width: 16px; height: 16px; display: inline; margin-right: 4px;" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clip-rule="evenodd"/>
+                    </svg>
+                    Logout
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Groups Tab (Default) -->
+        <div id="groups" class="tab-content active">
+            <div class="content-header">
+                <h3>📊 All Groups</h3>
+                {% if assigned_classes %}
+                <p style="color: #9ca3af; margin-top: 0.5rem;">
+                    Managing groups from: <strong style="color: #e5e7eb;">{{ assigned_classes|join:", " }}</strong>
+                </p>
+                {% endif %}
+            </div>
+
+            {% if group_details %}
+            <div class="accordion" id="groupAccordion">
+                {% for item in group_details %}
+                <div class="accordion-item mb-3 coordinator-card">
+                    <h2 class="accordion-header" id="heading{{ item.group.id }}">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                            data-bs-target="#collapse{{ item.group.id }}" aria-expanded="false"
+                            aria-controls="collapse{{ item.group.id }}">
+                            <div class="d-flex flex-wrap gap-2 align-items-center">
+                                <span><strong>Group {{ item.group.id }}</strong></span>
+                                <span class="badge badge-info">{{ item.group_size }} Members</span>
+                                {% if item.coordinator_approval %}
+                                    {% if item.coordinator_approval.status == 'approved' %}
+                                    <span class="badge badge-success">Approved</span>
+                                    {% elif item.coordinator_approval.status == 'pending' %}
+                                    <span class="badge badge-warning">Pending</span>
+                                    {% else %}
+                                    <span class="badge badge-danger">Rejected</span>
+                                    {% endif %}
+                                {% else %}
+                                <span class="badge badge-secondary">Not Requested</span>
+                                {% endif %}
+                                {% if item.assigned_guide %}
+                                <span class="badge badge-success">Guide Assigned</span>
+                                {% endif %}
+                                {% if item.approved_abstract %}
+                                <span class="badge badge-success">Topic Approved</span>
+                                {% endif %}
+                            </div>
+                        </button>
+                    </h2>
+                    <div id="collapse{{ item.group.id }}" class="accordion-collapse collapse" 
+                        aria-labelledby="heading{{ item.group.id }}" data-bs-parent="#groupAccordion">
+                        <div class="accordion-body">
+                            <!-- Group Details -->
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-6">
+                                    <h6 style="color: #a5b4fc; margin-bottom: 1rem;">👥 Group Information</h6>
+                                    <p class="mb-1"><strong style="color: #e5e7eb;">Group ID:</strong> {{ item.group.id }}</p>
+                                    <p class="mb-1"><strong style="color: #e5e7eb;">Leader:</strong> {{ item.group.leader.username }}
+                                        ({{ item.group.leader.first_name }} {{ item.group.leader.last_name }})</p>
+                                    <p class="mb-1"><strong style="color: #e5e7eb;">Class:</strong> {{ item.class_name|default:"-" }}</p>
+                                    <p class="mb-1"><strong style="color: #e5e7eb;">Department:</strong> {{ item.department|default:"-" }}</p>
+                                    <p class="mb-1"><strong style="color: #e5e7eb;">Group Size:</strong> {{ item.group_size }}</p>
+                                    <p class="mb-0"><strong style="color: #e5e7eb;">Created:</strong> {{ item.group.created_at|date:"M d, Y H:i" }}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 style="color: #a5b4fc; margin-bottom: 1rem;">📋 Status Information</h6>
+                                    <p class="mb-1"><strong style="color: #e5e7eb;">Coordinator Approval:</strong>
+                                        {% if item.coordinator_approval %}
+                                            {% if item.coordinator_approval.status == 'approved' %}
+                                            <span class="badge badge-success">Approved</span>
+                                            {% elif item.coordinator_approval.status == 'pending' %}
+                                            <span class="badge badge-warning">Pending</span>
+                                            {% else %}
+                                            <span class="badge badge-danger">Rejected</span>
+                                            {% endif %}
+                                        {% else %}
+                                        <span class="badge badge-secondary">Not Requested</span>
+                                        {% endif %}
+                                    </p>
+                                    <p class="mb-1"><strong style="color: #e5e7eb;">Assigned Guide:</strong>
+                                        {% if item.assigned_guide %}
+                                        {{ item.assigned_guide.get_full_name|default:item.assigned_guide.username }}
+                                        {% else %}
+                                        -
+                                        {% endif %}
+                                    </p>
+                                    <p class="mb-1"><strong style="color: #e5e7eb;">Selected Topic:</strong>
+                                        {% if item.approved_abstract %}
+                                        {{ item.approved_abstract.title }}
+                                        {% else %}
+                                        -
+                                        {% endif %}
+                                    </p>
+                                    {% if item.approved_abstract %}
+                                    <p class="mb-0"><strong style="color: #e5e7eb;">Topic Submitted:</strong> {{ item.approved_abstract.submitted_at|date:"M d, Y H:i" }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <!-- SDG Information -->
+                            <div class="mb-4" style="background: rgba(99, 102, 241, 0.05); padding: 1rem; border-radius: 8px; border: 1px solid rgba(99, 102, 241, 0.2);">
+                                <h6 style="color: #a5b4fc; margin-bottom: 0.75rem;">🌍 Sustainable Development Goals</h6>
+                                {% if item.sdg and item.sdg.is_submitted %}
+                                    <span class="badge badge-success mb-2">Submitted</span>
+                                    <small style="color: #9ca3af; display: block; margin-bottom: 0.5rem;">{{ item.sdg.created_at|date:"M d, Y H:i" }}</small>
+                                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                                        {% if item.sdg.sdg1 %}<span class="badge badge-info">{{ item.sdg.sdg1|sdg_title }}</span>{% endif %}
+                                        {% if item.sdg.sdg2 %}<span class="badge badge-info">{{ item.sdg.sdg2|sdg_title }}</span>{% endif %}
+                                        {% if item.sdg.sdg3 %}<span class="badge badge-info">{{ item.sdg.sdg3|sdg_title }}</span>{% endif %}
+                                        {% if item.sdg.sdg4 %}<span class="badge badge-info">{{ item.sdg.sdg4|sdg_title }}</span>{% endif %}
+                                        {% if item.sdg.sdg5 %}<span class="badge badge-info">{{ item.sdg.sdg5|sdg_title }}</span>{% endif %}
+                                    </div>
+                                {% else %}
+                                    <span class="badge badge-secondary">Not Submitted</span>
+                                {% endif %}
+                            </div>
+
+                            <!-- Group Members -->
+                            <div class="mb-4">
+                                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse"
+                                    data-bs-target="#members{{ item.group.id }}" aria-expanded="false">
+                                    👥 Show / Hide Group Members
+                                </button>
+                                <div class="collapse mt-2" id="members{{ item.group.id }}">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-bordered mb-0 table-glass">
+                                            <thead>
+                                                <tr>
+                                                    <th>Username</th>
+                                                    <th>Name</th>
+                                                    <th>Roll Number</th>
+                                                    <th>CGP</th>
+                                                    <th>Role</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for member in item.members %}
+                                                <tr>
+                                                    <td>{{ member.user.username }}</td>
+                                                    <td>{{ member.user.first_name }} {{ member.user.last_name }}</td>
+                                                    <td>{{ member.user.student_profile.roll_number|default:"-" }}</td>
+                                                    <td style="color: #fdba74; font-weight: 600;">{{ member.user.student_profile.cgp|default:"-" }}</td>
+                                                    <td>
+                                                        {% if member.user == item.group.leader %}
+                                                        <span class="badge badge-success">Leader</span>
+                                                        {% else %}
+                                                        Member
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Evaluations Section -->
+                            <div style="border-top: 2px solid rgba(99, 102, 241, 0.2); padding-top: 1.5rem; margin-top: 1.5rem;">
+                                <h5 style="color: #a5b4fc; margin-bottom: 1.5rem;">📊 Evaluations</h5>
+
+                                <!-- Zeroth Evaluation -->
+                                <div class="mb-4 pb-4" style="border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                                    <h6 style="color: #fbbf24; margin-bottom: 1rem;">📊 Zeroth Evaluation</h6>
+                                    
+                                    {% with eval=item.evaluations.zeroth file=item.evaluation_files.zeroth %}
+                                    {% if file %}
+                                        <div class="mb-3 p-2" style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 8px;">
+                                            <div style="color: #86efac; font-size: 0.9rem;">
+                                                📎 <strong>Uploaded File:</strong> {{ file.file_name }}
+                                                <span style="color: #9ca3af; font-size: 0.85rem;">({{ file.file_size|filesizeformat }})</span>
+                                                <a href="{% url 'download_evaluation_file' file.id %}" class="btn btn-sm btn-success ms-2">Download</a>
+                                            </div>
+                                        </div>
+                                        
+                                        {% if eval and eval.coordinator_submitted %}
+                                            <div class="alert alert-success">
+                                                ✅ Your evaluation submitted
+                                                {% if eval.coordinator_review %}
+                                                <div class="mt-2" style="background: rgba(255, 255, 255, 0.05); padding: 0.75rem; border-radius: 6px;">
+                                                    <strong style="color: #fbbf24;">Your Review:</strong>
+                                                    <p style="color: #e5e7eb; margin: 0.5rem 0 0;">{{ eval.coordinator_review }}</p>
+                                                </div>
+                                                {% endif %}
+                                                {% if eval.is_completed %}
+                                                <div class="mt-2"><strong>✓ Guide also submitted - Evaluation Complete!</strong></div>
+                                                {% if eval.guide_review %}
+                                                <div class="mt-2" style="background: rgba(255, 255, 255, 0.05); padding: 0.75rem; border-radius: 6px;">
+                                                    <strong style="color: #a78bfa;">Guide's Review:</strong>
+                                                    <p style="color: #e5e7eb; margin: 0.5rem 0 0;">{{ eval.guide_review }}</p>
+                                                </div>
+                                                {% endif %}
+                                                {% else %}
+                                                <div class="mt-2">⏳ Waiting for guide evaluation...</div>
+                                                {% endif %}
+                                            </div>
+                                        {% else %}
+                                            <form method="post" action="{% url 'submit_coordinator_evaluation' item.group.id 'zeroth' %}" style="background: rgba(251, 191, 36, 0.08); padding: 1rem; border-radius: 8px; border: 1px solid rgba(251, 191, 36, 0.2);">
+                                                {% csrf_token %}
+                                                <div class="form-check mb-2">
+                                                    <input class="form-check-input" type="checkbox" name="technical_exposure" id="coord_tech_{{ item.group.id }}">
+                                                    <label class="form-check-label" for="coord_tech_{{ item.group.id }}">Technical Exposure</label>
+                                                </div>
+                                                <div class="form-check mb-2">
+                                                    <input class="form-check-input" type="checkbox" name="socially_relevant" id="coord_social_{{ item.group.id }}">
+                                                    <label class="form-check-label" for="coord_social_{{ item.group.id }}">Socially Relevant</label>
+                                                </div>
+                                                <div class="form-check mb-2">
+                                                    <input class="form-check-input" type="checkbox" name="product_based" id="coord_product_{{ item.group.id }}">
+                                                    <label class="form-check-label" for="coord_product_{{ item.group.id }}">Product Based / Application</label>
+                                                </div>
+                                                <div class="form-check mb-3">
+                                                    <input class="form-check-input" type="checkbox" name="research_oriented" id="coord_research_{{ item.group.id }}">
+                                                    <label class="form-check-label" for="coord_research_{{ item.group.id }}">Research Oriented</label>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="coord_review_{{ item.group.id }}" class="form-label" style="color: #e5e7eb; font-weight: 600;">Review / Feedback (Optional)</label>
+                                                    <textarea class="form-control" id="coord_review_{{ item.group.id }}" name="review" rows="4" 
+                                                        placeholder="Provide your detailed review and feedback..."></textarea>
+                                                </div>
+                                                <button type="submit" class="btn btn-warning btn-sm">Submit Evaluation</button>
+                                            </form>
+                                        {% endif %}
+                                    {% else %}
+                                        <div class="alert alert-warning">
+                                            ⚠️ <strong>File Not Uploaded</strong><br>
+                                            The group must upload their evaluation file before you can evaluate.
+                                        </div>
+                                    {% endif %}
+                                    {% endwith %}
+                                </div>
+
+                                <!-- First Evaluation (Student-level) -->
+                                {% with zeroth_eval=item.evaluations.zeroth %}
+                                <div class="mb-4 pb-4" style="border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                                    <h6 style="color: #60a5fa; margin-bottom: 1rem;">📊 First Evaluation (Per Student)</h6>
+                                    
+                                    {% if not zeroth_eval or not zeroth_eval.is_completed %}
+                                        <div class="alert alert-warning">
+                                            🔒 <strong>Locked:</strong> Complete Zeroth Evaluation first.
+                                        </div>
+                                    {% else %}
+                                        {% with student_evals=item.student_evaluations.first %}
+                                            <form method="post" action="{% url 'submit_coordinator_student_evaluation' item.group.id 'first' %}" style="background: rgba(96, 165, 250, 0.08); padding: 1rem; border-radius: 8px; border: 1px solid rgba(96, 165, 250, 0.2);">
+                                                {% csrf_token %}
+                                                {% if student_evals.values.0 and student_evals.values.0.coordinator_submitted %}
+                                                <div class="alert alert-success mb-3">
+                                                    ✅ Evaluation submitted
+                                                    {% if student_evals.values.0.finalized %}
+                                                    <span class="ms-2"><strong>✓ Finalized</strong> (Both evaluations complete)</span>
+                                                    {% else %}
+                                                    <span class="ms-2">⏳ Waiting for guide evaluation...</span>
+                                                    {% endif %}
+                                                    <div class="mt-2"><small>You can edit the marks below if needed.</small></div>
+                                                </div>
+                                                {% endif %}
+                                                <div class="table-responsive">
+                                                    <table class="table table-bordered" style="background: rgba(17, 24, 39, 0.8); color: #e5e7eb;">
+                                                        <thead>
+                                                            <tr style="background: rgba(96, 165, 250, 0.1);">
+                                                                <th style="color: #93c5fd;">Student Name</th>
+                                                                <th style="color: #93c5fd; text-align: center;">Topic<br><small>(5)</small></th>
+                                                                <th style="color: #93c5fd; text-align: center;">Planning<br><small>(5)</small></th>
+                                                                <th style="color: #93c5fd; text-align: center;">Scale<br><small>(2)</small></th>
+                                                                <th style="color: #93c5fd; text-align: center;">Novelty<br><small>(5)</small></th>
+                                                                <th style="color: #93c5fd; text-align: center;">Task<br><small>(5)</small></th>
+                                                                <th style="color: #93c5fd; text-align: center;">Sched<br><small>(3)</small></th>
+                                                                <th style="color: #93c5fd; text-align: center;">Interim<br><small>(5)</small></th>
+                                                                <th style="color: #93c5fd; text-align: center;">Pres<br><small>(5)</small></th>
+                                                                <th style="color: #93c5fd; text-align: center;">Viva<br><small>(5)</small></th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {% for member in item.members %}
+                                                            {% with eval=student_evals|get_item:member.user.id %}
+                                                            <tr>
+                                                                <td style="font-weight: 600;">{{ member.user.username }}</td>
+                                                                <td><input type="number" name="student_{{ member.user.id }}_topic" min="0" max="5" value="{{ eval.coordinator_topic|default:'' }}" class="form-control form-control-sm" required></td>
+                                                                <td><input type="number" name="student_{{ member.user.id }}_planning" min="0" max="5" value="{{ eval.coordinator_planning|default:'' }}" class="form-control form-control-sm" required></td>
+                                                                <td><input type="number" name="student_{{ member.user.id }}_scalability" min="0" max="2" value="{{ eval.coordinator_scalability|default:'' }}" class="form-control form-control-sm" required></td>
+                                                                <td><input type="number" name="student_{{ member.user.id }}_novelty" min="0" max="5" value="{{ eval.coordinator_novelty|default:'' }}" class="form-control form-control-sm" required></td>
+                                                                <td><input type="number" name="student_{{ member.user.id }}_task_distribution" min="0" max="5" value="{{ eval.coordinator_task_distribution|default:'' }}" class="form-control form-control-sm" required></td>
+                                                                <td><input type="number" name="student_{{ member.user.id }}_schedule" min="0" max="3" value="{{ eval.coordinator_schedule|default:'' }}" class="form-control form-control-sm" required></td>
+                                                                <td><input type="number" name="student_{{ member.user.id }}_interim" min="0" max="5" value="{{ eval.coordinator_interim|default:'' }}" class="form-control form-control-sm" required></td>
+                                                                <td><input type="number" name="student_{{ member.user.id }}_presentation" min="0" max="5" value="{{ eval.coordinator_presentation|default:'' }}" class="form-control form-control-sm" required></td>
+                                                                <td><input type="number" name="student_{{ member.user.id }}_viva" min="0" max="5" value="{{ eval.coordinator_viva|default:'' }}" class="form-control form-control-sm" required></td>
+                                                            </tr>
+                                                            {% endwith %}
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                
+                                                {% with first_eval=item.evaluations.first %}
+                                                <div class="mt-3" style="border-top: 1px solid rgba(96, 165, 250, 0.2); padding-top: 1rem;">
+                                                    <label for="presentation_review_{{ item.group.id }}" style="color: #93c5fd; font-weight: 600; display: block; margin-bottom: 0.5rem;">
+                                                        📝 Presentation Review (Group)
+                                                    </label>
+                                                    <textarea name="presentation_review" id="presentation_review_{{ item.group.id }}" rows="4" class="form-control" 
+                                                        placeholder="Enter your review of the group's first presentation...">{{ first_eval.coordinator_review|default:'' }}</textarea>
+                                                </div>
+                                                {% endwith %}
+                                                
+                                                <button type="submit" class="btn btn-info btn-sm mt-3">
+                                                    {% if student_evals.values.0 and student_evals.values.0.coordinator_submitted %}Update{% else %}Submit{% endif %} First Evaluation
+                                                </button>
+                                            </form>
+                                        {% endwith %}
+                                    {% endif %}
+                                </div>
+                                {% endwith %}
+
+                                <!-- Second Evaluation (Student-level) -->
+                                {% with first_evals=item.student_evaluations.first %}
+                                <div class="mb-4">
+                                    <h6 style="color: #34d399; margin-bottom: 1rem;">📊 Second Evaluation (Per Student)</h6>
+                                    
+                                    {% if not item.first_complete %}
+                                        <div class="alert alert-warning">
+                                            🔒 <strong>Locked:</strong> Complete First Evaluation first.
+                                        </div>
+                                    {% else %}
+                                        {% with student_evals=item.student_evaluations.second %}
+                                            <form method="post" action="{% url 'submit_coordinator_student_evaluation' item.group.id 'second' %}" style="background: rgba(52, 211, 153, 0.08); padding: 1rem; border-radius: 8px; border: 1px solid rgba(52, 211, 153, 0.2);">
+                                                {% csrf_token %}
+                                                {% if student_evals.values.0 and student_evals.values.0.coordinator_submitted %}
+                                                <div class="alert alert-success mb-3">
+                                                    ✅ Evaluation submitted
+                                                    {% if student_evals.values.0.finalized %}
+                                                    <span class="ms-2"><strong>✓ Finalized</strong> (Both evaluations complete)</span>
+                                                    {% else %}
+                                                    <span class="ms-2">⏳ Waiting for guide evaluation...</span>
+                                                    {% endif %}
+                                                    <div class="mt-2"><small>You can edit the marks below if needed.</small></div>
+                                                </div>
+                                                {% endif %}
+                                                <div class="table-responsive">
+                                                    <table class="table table-bordered" style="background: rgba(17, 24, 39, 0.8); color: #e5e7eb;">
+                                                        <thead>
+                                                            <tr style="background: rgba(52, 211, 153, 0.1);">
+                                                                <th style="color: #6ee7b7;">Student Name</th>
+                                                                <th style="color: #6ee7b7; text-align: center;">Topic<br><small>(5)</small></th>
+                                                                <th style="color: #6ee7b7; text-align: center;">Planning<br><small>(5)</small></th>
+                                                                <th style="color: #6ee7b7; text-align: center;">Scale<br><small>(2)</small></th>
+                                                                <th style="color: #6ee7b7; text-align: center;">Novelty<br><small>(5)</small></th>
+                                                                <th style="color: #6ee7b7; text-align: center;">Task<br><small>(5)</small></th>
+                                                                <th style="color: #6ee7b7; text-align: center;">Sched<br><small>(3)</small></th>
+                                                                <th style="color: #6ee7b7; text-align: center;">Interim<br><small>(5)</small></th>
+                                                                <th style="color: #6ee7b7; text-align: center;">Pres<br><small>(5)</small></th>
+                                                                <th style="color: #6ee7b7; text-align: center;">Viva<br><small>(5)</small></th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {% for member in item.members %}
+                                                            {% with eval=student_evals|get_item:member.user.id %}
+                                                            <tr>
+                                                                <td style="font-weight: 600;">{{ member.user.username }}</td>
+                                                                <td><input type="number" name="student_{{ member.user.id }}_topic" min="0" max="5" value="{{ eval.coordinator_topic|default:'' }}" class="form-control form-control-sm" required></td>
+                                                                <td><input type="number" name="student_{{ member.user.id }}_planning" min="0" max="5" value="{{ eval.coordinator_planning|default:'' }}" class="form-control form-control-sm" required></td>
+                                                                <td><input type="number" name="student_{{ member.user.id }}_scalability" min="0" max="2" value="{{ eval.coordinator_scalability|default:'' }}" class="form-control form-control-sm" required></td>
+                                                                <td><input type="number" name="student_{{ member.user.id }}_novelty" min="0" max="5" value="{{ eval.coordinator_novelty|default:'' }}" class="form-control form-control-sm" required></td>
+                                                                <td><input type="number" name="student_{{ member.user.id }}_task_distribution" min="0" max="5" value="{{ eval.coordinator_task_distribution|default:'' }}" class="form-control form-control-sm" required></td>
+                                                                <td><input type="number" name="student_{{ member.user.id }}_schedule" min="0" max="3" value="{{ eval.coordinator_schedule|default:'' }}" class="form-control form-control-sm" required></td>
+                                                                <td><input type="number" name="student_{{ member.user.id }}_interim" min="0" max="5" value="{{ eval.coordinator_interim|default:'' }}" class="form-control form-control-sm" required></td>
+                                                                <td><input type="number" name="student_{{ member.user.id }}_presentation" min="0" max="5" value="{{ eval.coordinator_presentation|default:'' }}" class="form-control form-control-sm" required></td>
+                                                                <td><input type="number" name="student_{{ member.user.id }}_viva" min="0" max="5" value="{{ eval.coordinator_viva|default:'' }}" class="form-control form-control-sm" required></td>
+                                                            </tr>
+                                                            {% endwith %}
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                
+                                                {% with second_eval=item.evaluations.second %}
+                                                <div class="mt-3" style="border-top: 1px solid rgba(52, 211, 153, 0.2); padding-top: 1rem;">
+                                                    <label for="presentation_review_second_{{ item.group.id }}" style="color: #6ee7b7; font-weight: 600; display: block; margin-bottom: 0.5rem;">
+                                                        📝 Presentation Review (Group)
+                                                    </label>
+                                                    <textarea name="presentation_review" id="presentation_review_second_{{ item.group.id }}" rows="4" class="form-control" 
+                                                        placeholder="Enter your review of the group's second presentation...">{{ second_eval.coordinator_review|default:'' }}</textarea>
+                                                </div>
+                                                {% endwith %}
+                                                
+                                                <button type="submit" class="btn btn-success btn-sm mt-3">
+                                                    {% if student_evals.values.0 and student_evals.values.0.coordinator_submitted %}Update{% else %}Submit{% endif %} Second Evaluation
+                                                </button>
+                                            </form>
+                                        {% endwith %}
+                                    {% endif %}
+                                </div>
+                                {% endwith %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="coordinator-card">
+                <p style="color: #9ca3af; margin: 0;">No groups found for assigned class(es).</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Approvals Tab -->
+        <div id="approvals" class="tab-content">
+            <div class="content-header">
+                <h3>📋 Pending Group Approvals</h3>
+            </div>
+
+            {% if pending_approvals %}
+            <div class="list-group">
+                {% for approval in pending_approvals %}
+                <div class="coordinator-card">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div style="flex: 1;">
+                            <h6 class="mb-2" style="color: #e5e7eb;">Group Leader: {{ approval.group.leader.username }}</h6>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px;">
+                                <div>
+                                    <strong style="color: #e5e7eb;">Full Name:</strong>
+                                    <p style="color: #9ca3af; margin: 0;">{{ approval.group.leader.first_name }} {{ approval.group.leader.last_name }}</p>
+                                </div>
+                                {% if approval.group.leader.student_profile %}
+                                <div>
+                                    <strong style="color: #e5e7eb;">Class:</strong>
+                                    <p style="color: #9ca3af; margin: 0;">{{ approval.group.leader.student_profile.class_name|default:"N/A" }}</p>
+                                </div>
+                                <div>
+                                    <strong style="color: #e5e7eb;">CGP:</strong>
+                                    <p style="color: #fdba74; font-weight: 600; margin: 0;">{{ approval.group.leader.student_profile.cgp|default:"N/A" }}</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <p class="mb-2"><strong style="color: #e5e7eb;">Group Members:</strong></p>
+                            <table class="table table-sm table-glass mb-2">
+                                <thead>
+                                    <tr>
+                                        <th>Username</th>
+                                        <th>Name</th>
+                                        <th>Roll No</th>
+                                        <th>CGP</th>
+                                        <th>Role</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>{{ approval.group.leader.username }}</td>
+                                        <td>{{ approval.group.leader.first_name }} {{ approval.group.leader.last_name }}</td>
+                                        <td>{{ approval.group.leader.student_profile.roll_number|default:"-" }}</td>
+                                        <td style="color: #fdba74; font-weight: 600;">{{ approval.group.leader.student_profile.cgp|default:"-" }}</td>
+                                        <td><span class="badge badge-info">Leader</span></td>
+                                    </tr>
+                                    {% for member in approval.group.groupmember_set.all %}
+                                    {% if member.user != approval.group.leader %}
+                                    <tr>
+                                        <td>{{ member.user.username }}</td>
+                                        <td>{{ member.user.first_name }} {{ member.user.last_name }}</td>
+                                        <td>{{ member.user.student_profile.roll_number|default:"-" }}</td>
+                                        <td style="color: #fdba74; font-weight: 600;">{{ member.user.student_profile.cgp|default:"-" }}</td>
+                                        <td>Member</td>
+                                    </tr>
+                                    {% endif %}
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                            <p style="color: #9ca3af; margin: 0;">Requested: {{ approval.created_at|date:"M d, Y H:i" }}</p>
+                        </div>
+                        <div>
+                            <form method="post" action="{% url 'coordinator_dashboard' %}" class="d-inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="approval_id" value="{{ approval.id }}">
+                                <button type="submit" name="action" value="approve" class="btn btn-success btn-sm me-2">Approve</button>
+                                <button type="submit" name="action" value="reject" class="btn btn-danger btn-sm">Reject</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="coordinator-card">
+                <p style="color: #9ca3af; margin: 0;">No pending approval requests.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Topics Tab -->
+        <div id="topics" class="tab-content">
+            <div class="content-header">
+                <h3>📝 Pending Topic Approvals</h3>
+                <p style="color: #9ca3af; margin-top: 0.5rem;">Topics that have been approved by guides and are awaiting coordinator approval</p>
+            </div>
+
+            {% if coordinator_pending_abstracts %}
+            <div class="table-responsive">
+                <table class="table table-bordered align-middle table-glass">
+                    <thead>
+                        <tr>
+                            <th>Group</th>
+                            <th>Leader</th>
+                            <th>Title</th>
+                            <th>Guide Status</th>
+                            <th>Coordinator Status</th>
+                            <th>Submitted</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for abstract in coordinator_pending_abstracts %}
+                        <tr>
+                            <td>{{ abstract.group.id }}</td>
+                            <td>{{ abstract.group.leader.username }}</td>
+                            <td>{{ abstract.title }}</td>
+                            <td><span class="badge badge-success">Approved</span></td>
+                            <td><span class="badge badge-warning">Pending</span></td>
+                            <td>{{ abstract.submitted_at|date:"M d, Y H:i" }}</td>
+                            <td>
+                                <form method="post" action="{% url 'coordinator_dashboard' %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="abstract_id" value="{{ abstract.id }}">
+                                    <button type="submit" name="abstract_action" value="approve" class="btn btn-success btn-sm me-1">Approve</button>
+                                    <button type="submit" name="abstract_action" value="reject" class="btn btn-danger btn-sm">Reject</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="coordinator-card">
+                <p style="color: #9ca3af; margin: 0;">No guide-approved topics pending coordinator review.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+    // Tab switching functionality
+    document.querySelectorAll('.tab-link').forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Remove active class from all tabs and links
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-link').forEach(l => {
+                l.classList.remove('active');
+            });
+            
+            // Add active class to clicked link and corresponding tab
+            const tabId = this.getAttribute('data-tab');
+            document.getElementById(tabId).classList.add('active');
+            this.classList.add('active');
+            
+            // Update URL hash
+            window.location.hash = tabId;
+        });
+    });
+
+    // Handle URL fragment on page load
+    window.addEventListener('DOMContentLoaded', function() {
+        const hash = window.location.hash.substring(1); // Remove the # symbol
+        if (hash) {
+            // Remove active class from all tabs and links
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-link').forEach(l => {
+                l.classList.remove('active');
+            });
+            
+            // Activate the tab specified in the URL fragment
+            const targetTab = document.getElementById(hash);
+            const targetLink = document.querySelector(`.tab-link[data-tab="${hash}"]`);
+            if (targetTab && targetLink) {
+                targetTab.classList.add('active');
+                targetLink.classList.add('active');
+            }
+        }
+    });
+</script>
+
+{% endblock %}
