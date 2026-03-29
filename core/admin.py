@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 
-from .models import Abstract, CoordinatorApproval, Group, GroupMember, GroupRequest, GuideRequest, Notification, StudentProfile, FacultyProfile, SustainableDevelopmentGoal, GroupEvaluation, EvaluationFile, StudentEvaluation, Class, CoordinatorAssignment, ProjectReport
+from .models import Abstract, CoordinatorApproval, Group, GroupMember, GroupRequest, GuideRequest, Notification, StudentProfile, FacultyProfile, GroupEvaluation, EvaluationFile, StudentEvaluation, Class, CoordinatorAssignment, ProjectReport, SRSSubmission, SDDSubmission
 
 
 @admin.register(Class)
@@ -135,14 +135,6 @@ class AbstractAdmin(admin.ModelAdmin):
 	readonly_fields = ("submitted_at", "reviewed_at")
 
 
-@admin.register(SustainableDevelopmentGoal)
-class SustainableDevelopmentGoalAdmin(admin.ModelAdmin):
-	list_display = ("group", "submitted_by", "created_at")
-	search_fields = ("group__leader__username", "submitted_by__username", "sdg1", "sdg2", "sdg3", "sdg4", "sdg5")
-	ordering = ("-created_at",)
-	readonly_fields = ("created_at",)
-
-
 @admin.register(Notification)
 class NotificationAdmin(admin.ModelAdmin):
 	list_display = ("recipient", "notif_type", "is_read", "created_at", "related_abstract")
@@ -207,6 +199,22 @@ class ProjectReportAdmin(admin.ModelAdmin):
 	)
 	list_filter = ("review_status", "uploaded_at")
 	ordering = ("-uploaded_at",)
+	readonly_fields = ("uploaded_at", "rejected_at")
+
+
+@admin.register(SRSSubmission)
+class SRSSubmissionAdmin(admin.ModelAdmin):
+	list_display = ("group", "uploaded_by", "uploaded_at", "review_status", "rejected_by", "rejected_at")
+	search_fields = ("group__leader__username", "uploaded_by__username", "review_status")
+	list_filter = ("review_status", "uploaded_at")
+	readonly_fields = ("uploaded_at", "rejected_at")
+
+
+@admin.register(SDDSubmission)
+class SDDSubmissionAdmin(admin.ModelAdmin):
+	list_display = ("group", "uploaded_by", "uploaded_at", "review_status", "rejected_by", "rejected_at")
+	search_fields = ("group__leader__username", "uploaded_by__username", "review_status")
+	list_filter = ("review_status", "uploaded_at")
 	readonly_fields = ("uploaded_at", "rejected_at")
 
 

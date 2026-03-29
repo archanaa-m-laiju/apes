@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Abstract, CoordinatorApproval, CoordinatorAssignment, Group, GroupMember, GroupRequest, GuideRequest, Notification, StudentProfile, FacultyProfile, SustainableDevelopmentGoal, GroupEvaluation, EvaluationFile, ProjectReport, StudentEvaluation
+from .models import Abstract, CoordinatorApproval, CoordinatorAssignment, Group, GroupMember, GroupRequest, GuideRequest, Notification, StudentProfile, FacultyProfile, GroupEvaluation, EvaluationFile, ProjectReport, StudentEvaluation, SRSSubmission, SDDSubmission
 
 
 def _is_student(user):
@@ -285,48 +285,6 @@ def mini_project(request):
 	if request.method == "POST":
 		action = request.POST.get("action")
 
-		if action == "submit_sdg":
-			if not group:
-				messages.error(request, "You must be in a group to submit SDG.")
-				return redirect("mini_project")
-
-			if group.leader != request.user:
-				messages.error(request, "Only the group leader can submit SDG.")
-				return redirect("mini_project")
-
-			coordinator_approval = CoordinatorApproval.objects.filter(
-				group=group,
-				status=CoordinatorApproval.STATUS_APPROVED,
-			).first()
-			if not coordinator_approval:
-				messages.error(request, "Coordinator approval is required before SDG submission.")
-				return redirect("mini_project")
-
-			if SustainableDevelopmentGoal.objects.filter(group=group).exists():
-				messages.info(request, "SDG already submitted for this group.")
-				return redirect("mini_project")
-
-			sdg_fields = [
-				"sdg1", "sdg1_justification", "sdg2", "sdg2_justification", "sdg3", "sdg3_justification",
-				"sdg4", "sdg4_justification", "sdg5", "sdg5_justification",
-				"wp1", "wp1_justification", "wp2", "wp2_justification", "wp3", "wp3_justification",
-				"wp4", "wp4_justification", "wp5", "wp5_justification",
-				"po1", "po2", "po3", "po4", "po5", "pso1", "pso2",
-			]
-			sdg_data = {}
-			for field in sdg_fields:
-				value = request.POST.get(field, "").strip()
-				sdg_data[field] = value
-
-			SustainableDevelopmentGoal.objects.create(
-				group=group,
-				submitted_by=request.user,
-				is_submitted=True,
-				**sdg_data,
-			)
-			messages.success(request, "SDG submitted successfully.")
-			return redirect("mini_project")
-
 		if group and group.leader != request.user:
 			messages.error(request, "Only the group leader can send requests.")
 			return redirect("mini_project")
@@ -398,15 +356,10 @@ def mini_project(request):
 		elif coordinator_approvals:
 			coordinator_approval = coordinator_approvals[0]
 
-	sdg_submission = SustainableDevelopmentGoal.objects.filter(group=group).first() if group else None
 	assigned_guide = _get_accepted_guide_for_group(group) if group else None
+	srs_submission = SRSSubmission.objects.filter(group=group).first() if group else None
+	sdd_submission = SDDSubmission.objects.filter(group=group).first() if group else None
 	selected_topic = Abstract.objects.filter(group=group, is_final_approved=True).order_by("-submitted_at").first() if group else None
-	can_submit_sdg = bool(
-		group
-		and is_leader
-		and is_coordinator_approved
-		and (not sdg_submission or not sdg_submission.is_submitted)
-	)
 	project_report = ProjectReport.objects.filter(group=group).first() if group else None
 	first_complete = _is_stage_completed_for_group(group, "first") if group else False
 	second_complete = _is_stage_completed_for_group(group, "second") if group else False
@@ -436,43 +389,6 @@ def mini_project(request):
 		}
 		_ensure_final_result(student_evaluations.get("second"))
 
-	# Official SDG names for display
-	sdg_names = {
-		'1': 'No Poverty', '2': 'Zero Hunger', '3': 'Good Health and Well-being',
-		'4': 'Quality Education', '5': 'Gender Equality', '6': 'Clean Water and Sanitation',
-		'7': 'Affordable and Clean Energy', '8': 'Decent Work and Economic Growth',
-		'9': 'Industry, Innovation and Infrastructure', '10': 'Reduced Inequalities',
-		'11': 'Sustainable Cities and Communities', '12': 'Responsible Consumption and Production',
-		'13': 'Climate Action', '14': 'Life Below Water', '15': 'Life on Land',
-		'16': 'Peace, Justice and Strong Institutions', '17': 'Partnerships for the Goals',
-	}
-	selected_sdgs = []
-	selected_wps = []
-	po_pso_pairs = []
-	if sdg_submission:
-		for i in range(1, 6):
-			val = getattr(sdg_submission, f'sdg{i}', '').strip()
-			if val:
-				selected_sdgs.append({
-					'number': val,
-					'name': sdg_names.get(val, val),
-					'justification': getattr(sdg_submission, f'sdg{i}_justification', '').strip(),
-				})
-		for i in range(1, 6):
-			val = getattr(sdg_submission, f'wp{i}', '').strip()
-			if val:
-				selected_wps.append({
-					'number': i,
-					'title': val,
-					'justification': getattr(sdg_submission, f'wp{i}_justification', '').strip(),
-				})
-		po_pso_pairs = [
-			('PO1', sdg_submission.po1), ('PO2', sdg_submission.po2),
-			('PO3', sdg_submission.po3), ('PO4', sdg_submission.po4),
-			('PO5', sdg_submission.po5), ('PSO1', sdg_submission.pso1),
-			('PSO2', sdg_submission.pso2),
-		]
-
 	second_eval_record = student_evaluations.get("second") if student_evaluations else None
 	ese_allowed = False
 	ese_message = "End Semester Evaluation will be available after completion of all internal evaluations."
@@ -496,12 +412,11 @@ def mini_project(request):
 		"coordinator_approval": coordinator_approval,
 		"coordinator_approvals": coordinator_approvals,
 		"is_coordinator_approved": is_coordinator_approved,
-		"sdg_submission": sdg_submission,
-		"selected_sdgs": selected_sdgs,
-		"selected_wps": selected_wps,
-		"po_pso_pairs": po_pso_pairs,
+		"srs_submission": srs_submission,
+		"sdd_submission": sdd_submission,
+		"can_submit_srs": bool(group and group.leader_id == request.user.id and first_complete),
+		"can_submit_sdd": bool(group and group.leader_id == request.user.id and srs_submission and srs_submission.review_status == SRSSubmission.STATUS_APPROVED),
 		"assigned_guide": assigned_guide,
-		"can_submit_sdg": can_submit_sdg,
 		"selected_topic": selected_topic,
 		"evaluation_files": evaluation_files,
 		"evaluations": evaluations,
@@ -516,94 +431,6 @@ def mini_project(request):
 		},
 	}
 	return render(request, "mini_project.html", context)
-
-
-@login_required
-def sdg_submission(request):
-	if not _is_student(request.user):
-		messages.error(request, "Only students can access this page.")
-		return redirect("dashboard")
-
-	group = _get_group_for_user(request.user)
-	is_leader = group and group.leader == request.user
-
-	if request.method == "POST":
-		if not group:
-			messages.error(request, "You must be in a group to submit SDG.")
-			return redirect("mini_project")
-
-		if group.leader != request.user:
-			messages.error(request, "Only the group leader can submit SDG.")
-			return redirect("sdg_submission")
-
-		coordinator_approval = CoordinatorApproval.objects.filter(
-			group=group,
-			status=CoordinatorApproval.STATUS_APPROVED,
-		).first()
-		if not coordinator_approval:
-			messages.error(request, "Coordinator approval is required before SDG submission.")
-			return redirect("sdg_submission")
-
-		if SustainableDevelopmentGoal.objects.filter(group=group).exists():
-			messages.info(request, "SDG already submitted for this group.")
-			return redirect("sdg_submission")
-
-		# Collect selected SDG goals (1-17)
-		selected_sdgs = []
-		for i in range(1, 6):
-			sdg_value = request.POST.get(f"sdg{i}", "").strip()
-			if sdg_value:
-				selected_sdgs.append(sdg_value)
-
-		# Validate selection
-		if len(selected_sdgs) < 4 or len(selected_sdgs) > 5:
-			messages.error(request, "You must select between 4 and 5 SDG goals.")
-			return redirect("sdg_submission")
-
-		# Check for duplicates
-		if len(selected_sdgs) != len(set(selected_sdgs)):
-			messages.error(request, "Cannot select the same SDG goal multiple times.")
-			return redirect("sdg_submission")
-
-		# Create SDG record with selected goal numbers stored in SDG fields
-		sdg_data = {
-			"group": group,
-			"submitted_by": request.user,
-			"is_submitted": True,
-		}
-
-		# Store SDG goal numbers in the sdg1-sdg5 fields
-		for idx, sdg_num in enumerate(selected_sdgs, 1):
-			sdg_data[f"sdg{idx}"] = sdg_num
-
-		SustainableDevelopmentGoal.objects.create(**sdg_data)
-		messages.success(request, f"SDG submitted successfully with {len(selected_sdgs)} goals selected.")
-		return redirect("mini_project")
-
-	# GET request - show SDG submission form
-	coordinator_approval = CoordinatorApproval.objects.filter(
-		group=group,
-		status=CoordinatorApproval.STATUS_APPROVED,
-	).first() if group else None
-
-	sdg_submission = SustainableDevelopmentGoal.objects.filter(group=group).first() if group else None
-
-	can_submit_sdg = bool(
-		group
-		and is_leader
-		and coordinator_approval
-		and coordinator_approval.status == CoordinatorApproval.STATUS_APPROVED
-		and (not sdg_submission or not sdg_submission.is_submitted)
-	)
-
-	context = {
-		"group": group,
-		"is_leader": is_leader,
-		"coordinator_approval": coordinator_approval,
-		"sdg_submission": sdg_submission,
-		"can_submit_sdg": can_submit_sdg,
-	}
-	return render(request, "sdg_submission.html", context)
 
 
 @login_required
@@ -677,6 +504,241 @@ def submit_project_report(request, group_id):
 		messages.success(request, "Project report updated successfully.")
 
 	return redirect(f"{reverse('mini_project')}#project-report")
+
+
+@login_required
+def srs_submission(request):
+	if not _is_student(request.user):
+		messages.error(request, "Only students can upload SRS documents.")
+		return redirect("dashboard")
+
+	group = _get_group_for_user(request.user)
+	if not group:
+		messages.error(request, "You must be in a group to submit SRS.")
+		return redirect("mini_project")
+
+	srs_submission = SRSSubmission.objects.filter(group=group).first()
+	can_submit_srs = group.leader_id == request.user.id and _is_stage_completed_for_group(group, "first")
+
+	if request.method == "POST":
+		if group.leader_id != request.user.id:
+			messages.error(request, "Only the group leader can upload the SRS document.")
+			return redirect("srs_submission")
+		if not _is_stage_completed_for_group(group, "first"):
+			messages.error(request, "SRS upload is allowed only after the Literature Review stage is complete.")
+			return redirect("srs_submission")
+
+		srs_file = request.FILES.get("srs_file")
+		if not srs_file:
+			messages.error(request, "Please choose a PDF file to upload.")
+			return redirect("srs_submission")
+
+		file_name = srs_file.name.lower()
+		if not file_name.endswith(".pdf"):
+			messages.error(request, "Only PDF files are allowed.")
+			return redirect("srs_submission")
+
+		content_type = (getattr(srs_file, "content_type", "") or "").lower()
+		if content_type and "pdf" not in content_type:
+			messages.error(request, "Only PDF files are allowed.")
+			return redirect("srs_submission")
+
+		if srs_submission:
+			if srs_submission.srs_file:
+				srs_submission.srs_file.delete(save=False)
+			srs_submission.srs_file = srs_file
+			srs_submission.uploaded_by = request.user
+			srs_submission.uploaded_at = timezone.now()
+			srs_submission.review_status = SRSSubmission.STATUS_PENDING
+			srs_submission.rejection_review = ""
+			srs_submission.rejected_by = None
+			srs_submission.rejected_at = None
+			srs_submission.save()
+			messages.success(request, "SRS document updated successfully.")
+		else:
+			SRSSubmission.objects.create(
+				group=group,
+				srs_file=srs_file,
+				uploaded_by=request.user,
+				review_status=SRSSubmission.STATUS_PENDING,
+			)
+			messages.success(request, "SRS document uploaded successfully.")
+		return redirect("srs_submission")
+
+	context = {
+		"group": group,
+		"srs_submission": srs_submission,
+		"is_leader": group.leader_id == request.user.id,
+		"can_submit_srs": can_submit_srs,
+		"literature_review_complete": _is_stage_completed_for_group(group, "first"),
+	}
+	return render(request, "srs_submission.html", context)
+
+
+@login_required
+def sdd_submission(request):
+	if not _is_student(request.user):
+		messages.error(request, "Only students can upload SDD documents.")
+		return redirect("dashboard")
+
+	group = _get_group_for_user(request.user)
+	if not group:
+		messages.error(request, "You must be in a group to submit SDD.")
+		return redirect("mini_project")
+
+	srs_submission = SRSSubmission.objects.filter(group=group).first()
+	sdd_submission = SDDSubmission.objects.filter(group=group).first()
+	can_submit_sdd = group.leader_id == request.user.id and srs_submission and srs_submission.review_status == SRSSubmission.STATUS_APPROVED
+
+	if request.method == "POST":
+		if group.leader_id != request.user.id:
+			messages.error(request, "Only the group leader can upload the SDD document.")
+			return redirect("sdd_submission")
+		if not srs_submission or srs_submission.review_status != SRSSubmission.STATUS_APPROVED:
+			messages.error(request, "SDD upload is allowed only after the SRS is approved.")
+			return redirect("sdd_submission")
+
+		sdd_file = request.FILES.get("sdd_file")
+		if not sdd_file:
+			messages.error(request, "Please choose a PDF file to upload.")
+			return redirect("sdd_submission")
+
+		file_name = sdd_file.name.lower()
+		if not file_name.endswith(".pdf"):
+			messages.error(request, "Only PDF files are allowed.")
+			return redirect("sdd_submission")
+
+		content_type = (getattr(sdd_file, "content_type", "") or "").lower()
+		if content_type and "pdf" not in content_type:
+			messages.error(request, "Only PDF files are allowed.")
+			return redirect("sdd_submission")
+
+		if sdd_submission:
+			if sdd_submission.sdd_file:
+				sdd_submission.sdd_file.delete(save=False)
+			sdd_submission.sdd_file = sdd_file
+			sdd_submission.uploaded_by = request.user
+			sdd_submission.uploaded_at = timezone.now()
+			sdd_submission.review_status = SDDSubmission.STATUS_PENDING
+			sdd_submission.rejection_review = ""
+			sdd_submission.rejected_by = None
+			sdd_submission.rejected_at = None
+			sdd_submission.save()
+			messages.success(request, "SDD document updated successfully.")
+		else:
+			SDDSubmission.objects.create(
+				group=group,
+				sdd_file=sdd_file,
+				uploaded_by=request.user,
+				review_status=SDDSubmission.STATUS_PENDING,
+			)
+			messages.success(request, "SDD document uploaded successfully.")
+		return redirect("sdd_submission")
+
+	context = {
+		"group": group,
+		"srs_submission": srs_submission,
+		"sdd_submission": sdd_submission,
+		"is_leader": group.leader_id == request.user.id,
+		"can_submit_sdd": can_submit_sdd,
+	}
+	return render(request, "sdd_submission.html", context)
+
+
+@login_required
+def download_srs_submission(request, submission_id):
+	submission = get_object_or_404(SRSSubmission, id=submission_id)
+	group = submission.group
+	group_for_user = _get_group_for_user(request.user)
+	allowed = (group_for_user == group) or (_is_guide(request.user) and _get_accepted_guide_for_group(group) == request.user) or _is_coordinator(request.user)
+	if not allowed:
+		return HttpResponseForbidden("You do not have permission to download this SRS document.")
+	return FileResponse(submission.srs_file.open("rb"), as_attachment=True, filename=os.path.basename(submission.srs_file.name))
+
+
+@login_required
+def download_sdd_submission(request, submission_id):
+	submission = get_object_or_404(SDDSubmission, id=submission_id)
+	group = submission.group
+	group_for_user = _get_group_for_user(request.user)
+	allowed = (group_for_user == group) or (_is_guide(request.user) and _get_accepted_guide_for_group(group) == request.user) or _is_coordinator(request.user)
+	if not allowed:
+		return HttpResponseForbidden("You do not have permission to download this SDD document.")
+	return FileResponse(submission.sdd_file.open("rb"), as_attachment=True, filename=os.path.basename(submission.sdd_file.name))
+
+
+@login_required
+def review_srs_submission(request, submission_id):
+	if not _is_coordinator(request.user):
+		return HttpResponseForbidden("Only coordinators can review SRS submissions.")
+	if request.method != "POST":
+		return redirect("coordinator_dashboard")
+
+	submission = get_object_or_404(SRSSubmission, id=submission_id)
+	if not _is_coordinator_authorized_for_group(request, submission.group):
+		messages.error(request, "You are not authorized to review this submission.")
+		return redirect("coordinator_dashboard")
+
+	action = request.POST.get("action")
+	feedback = request.POST.get("rejection_review", "").strip()
+	if action == "approve":
+		submission.review_status = SRSSubmission.STATUS_APPROVED
+		submission.rejection_review = ""
+		submission.rejected_by = None
+		submission.rejected_at = None
+		messages.success(request, "SRS approved.")
+	elif action == "reject":
+		if not feedback:
+			messages.error(request, "Feedback is required when rejecting SRS.")
+			return redirect("coordinator_dashboard")
+		submission.review_status = SRSSubmission.STATUS_REJECTED
+		submission.rejection_review = feedback
+		submission.rejected_by = request.user
+		submission.rejected_at = timezone.now()
+		messages.info(request, "SRS rejected.")
+	else:
+		messages.error(request, "Invalid SRS review action.")
+		return redirect("coordinator_dashboard")
+
+	submission.save()
+	return redirect("coordinator_dashboard")
+
+
+@login_required
+def review_sdd_submission(request, submission_id):
+	if not _is_coordinator(request.user):
+		return HttpResponseForbidden("Only coordinators can review SDD submissions.")
+	if request.method != "POST":
+		return redirect("coordinator_dashboard")
+
+	submission = get_object_or_404(SDDSubmission, id=submission_id)
+	if not _is_coordinator_authorized_for_group(request, submission.group):
+		messages.error(request, "You are not authorized to review this submission.")
+		return redirect("coordinator_dashboard")
+
+	action = request.POST.get("action")
+	feedback = request.POST.get("rejection_review", "").strip()
+	if action == "approve":
+		submission.review_status = SDDSubmission.STATUS_APPROVED
+		submission.rejection_review = ""
+		submission.rejected_by = None
+		submission.rejected_at = None
+		messages.success(request, "SDD approved.")
+	elif action == "reject":
+		if not feedback:
+			messages.error(request, "Feedback is required when rejecting SDD.")
+			return redirect("coordinator_dashboard")
+		submission.review_status = SDDSubmission.STATUS_REJECTED
+		submission.rejection_review = feedback
+		submission.rejected_by = request.user
+		submission.rejected_at = timezone.now()
+		messages.info(request, "SDD rejected.")
+	else:
+		messages.error(request, "Invalid SDD review action.")
+		return redirect("coordinator_dashboard")
+
+	submission.save()
+	return redirect("coordinator_dashboard")
 
 
 @login_required
@@ -964,10 +1026,6 @@ def guide_dashboard(request):
 	).select_related("group", "group__leader")
 
 	group_ids = accepted_requests.values_list("group_id", flat=True)
-	sdg_by_group_id = {
-		sdg.group_id: sdg
-		for sdg in SustainableDevelopmentGoal.objects.filter(group_id__in=group_ids)
-	}
 	report_by_group_id = {
 		report.group_id: report
 		for report in ProjectReport.objects.filter(group_id__in=group_ids)
@@ -1020,7 +1078,6 @@ def guide_dashboard(request):
 		blocked_reasons = [status["message"] for status in esestatus.values() if not status["allowed"] and status["message"]]
 		assigned_groups.append({
 			"group": guide_request.group,
-			"sdg": sdg_by_group_id.get(guide_request.group_id),
 			"project_report": report_by_group_id.get(guide_request.group_id),
 			"evaluations": evaluations_by_group.get(guide_request.group_id, {}),
 			"evaluation_files": evaluation_files_by_group.get(guide_request.group_id, {}),
@@ -1090,6 +1147,17 @@ def _get_accepted_guide_for_group(group):
 	"""Get the accepted guide for a group, if any."""
 	accepted_request = GuideRequest.objects.filter(group=group, status=GuideRequest.STATUS_ACCEPTED).first()
 	return accepted_request.guide if accepted_request else None
+
+
+def _is_coordinator_authorized_for_group(request, group):
+	student_profile = getattr(group.leader, "student_profile", None)
+	class_name = student_profile.student_class.name if student_profile and student_profile.student_class else None
+	if not class_name:
+		return False
+	return CoordinatorApproval.objects.filter(
+		coordinator=request.user,
+		group__leader__student_profile__student_class__name=class_name,
+	).exists()
 
 
 def _apply_abstract_derived_status(abstract):
@@ -1543,13 +1611,8 @@ def coordinator_dashboard(request):
 		),
 	)
 
-	sdg_by_group_id = {}
 	report_by_group_id = {}
 	if groups_queryset:
-		sdg_by_group_id = {
-			sdg.group_id: sdg
-			for sdg in SustainableDevelopmentGoal.objects.filter(group_id__in=groups_queryset.values_list("id", flat=True))
-		}
 		report_by_group_id = {
 			report.group_id: report
 			for report in ProjectReport.objects.filter(group_id__in=groups_queryset.values_list("id", flat=True))
@@ -1566,7 +1629,8 @@ def coordinator_dashboard(request):
 
 		abstracts = list(group.abstracts.all())
 		approved_abstract = next((item for item in abstracts if item.is_final_approved), None)
-		sdg_entry = sdg_by_group_id.get(group.id)
+		srs_submission = SRSSubmission.objects.filter(group=group).first()
+		sdd_submission = SDDSubmission.objects.filter(group=group).first()
 		project_report = report_by_group_id.get(group.id)
 
 		# Get evaluations for this group
@@ -1652,8 +1716,9 @@ def coordinator_dashboard(request):
 			"latest_guide_request": latest_guide_request,
 			"assigned_guide": assigned_guide,
 			"approved_abstract": approved_abstract,
-			"sdg": sdg_entry,
 			"project_report": project_report,
+			"srs_submission": srs_submission,
+			"sdd_submission": sdd_submission,
 			"evaluations": group_evaluations,
 			"evaluation_files": evaluation_files,
 			"student_evaluations": student_evaluations,
@@ -1705,44 +1770,10 @@ def profile(request):
 	
 	if _is_student(request.user):
 		context["student_profile"] = request.user.student_profile
-		# Fetch the student's group and its SDG submission
+		# Fetch the student's current group
 		group = _get_group_for_user(request.user)
 		if group:
-			sdg_submission = SustainableDevelopmentGoal.objects.filter(group=group).first()
 			context["student_group"] = group
-			context["sdg_submission"] = sdg_submission
-			
-			# Create a list of selected SDG goals with their names
-			sdg_names = {
-				'1': 'No Poverty',
-				'2': 'Zero Hunger',
-				'3': 'Good Health and Well-being',
-				'4': 'Quality Education',
-				'5': 'Gender Equality',
-				'6': 'Clean Water and Sanitation',
-				'7': 'Affordable and Clean Energy',
-				'8': 'Decent Work and Economic Growth',
-				'9': 'Industry, Innovation and Infrastructure',
-				'10': 'Reduced Inequalities',
-				'11': 'Sustainable Cities and Communities',
-				'12': 'Responsible Consumption and Production',
-				'13': 'Climate Action',
-				'14': 'Life Below Water',
-				'15': 'Life on Land',
-				'16': 'Peace, Justice and Strong Institutions',
-				'17': 'Partnerships for the Goals'
-			}
-			
-			selected_sdgs = []
-			if sdg_submission:
-				for i in range(1, 6):
-					sdg_field_value = getattr(sdg_submission, f"sdg{i}", "")
-					if sdg_field_value:
-						selected_sdgs.append({
-							'number': sdg_field_value,
-							'name': sdg_names.get(sdg_field_value, f'SDG {sdg_field_value}')
-						})
-			context["selected_sdgs"] = selected_sdgs
 	elif hasattr(request.user, "faculty_profile"):
 		context["faculty_profile"] = request.user.faculty_profile
 	

@@ -168,58 +168,6 @@ class Abstract(models.Model):
 		return f"{self.title} - {self.group.leader.username}"
 
 
-class SustainableDevelopmentGoal(models.Model):
-	group = models.OneToOneField(Group, on_delete=models.CASCADE, related_name="sdg")
-	
-	# Project Information
-	project_title = models.CharField(max_length=500, default="", blank=True)
-	project_description = models.TextField(default="", blank=True)
-	
-	# SDG Goals
-	sdg1 = models.CharField(max_length=255, default="", blank=True)
-	sdg1_justification = models.TextField(default="", blank=True)
-	sdg2 = models.CharField(max_length=255, default="", blank=True)
-	sdg2_justification = models.TextField(default="", blank=True)
-	sdg3 = models.CharField(max_length=255, default="", blank=True)
-	sdg3_justification = models.TextField(default="", blank=True)
-	sdg4 = models.CharField(max_length=255, default="", blank=True)
-	sdg4_justification = models.TextField(default="", blank=True)
-	sdg5 = models.CharField(max_length=255, default="", blank=True)
-	sdg5_justification = models.TextField(default="", blank=True)
-	
-	# Work Packages
-	wp1 = models.CharField(max_length=255, default="", blank=True)
-	wp1_justification = models.TextField(default="", blank=True)
-	wp2 = models.CharField(max_length=255, default="", blank=True)
-	wp2_justification = models.TextField(default="", blank=True)
-	wp3 = models.CharField(max_length=255, default="", blank=True)
-	wp3_justification = models.TextField(default="", blank=True)
-	wp4 = models.CharField(max_length=255, default="", blank=True)
-	wp4_justification = models.TextField(default="", blank=True)
-	wp5 = models.CharField(max_length=255, default="", blank=True)
-	wp5_justification = models.TextField(default="", blank=True)
-
-	# Program Outcomes
-	po1 = models.CharField(max_length=100, default="", blank=True)
-	po2 = models.CharField(max_length=100, default="", blank=True)
-	po3 = models.CharField(max_length=100, default="", blank=True)
-	po4 = models.CharField(max_length=100, default="", blank=True)
-	po5 = models.CharField(max_length=100, default="", blank=True)
-	pso1 = models.CharField(max_length=100, default="", blank=True)
-	pso2 = models.CharField(max_length=100, default="", blank=True)
-
-	submitted_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="submitted_sdgs")
-	is_submitted = models.BooleanField(default=False)
-	created_at = models.DateTimeField(auto_now_add=True)
-
-	def __str__(self):
-		return f"SDG - Group {self.group_id}"
-
-	@property
-	def content(self):
-		return f"SDG1: {self.sdg1}\nSDG2: {self.sdg2}\nSDG3: {self.sdg3}\nSDG4: {self.sdg4}\nSDG5: {self.sdg5}"
-
-
 class Notification(models.Model):
 	NOTIF_COORDINATOR_FORWARD = "coordinator_forward"
 	NOTIF_PRESENTATION_READY = "presentation_ready"
@@ -394,6 +342,66 @@ class ProjectReport(models.Model):
 
 	def __str__(self):
 		return f"Project Report - Group {self.group_id}"
+
+
+class SRSSubmission(models.Model):
+	"""Student SRS submission with coordinator approval workflow."""
+	STATUS_PENDING = "pending"
+	STATUS_APPROVED = "approved"
+	STATUS_REJECTED = "rejected"
+	STATUS_CHOICES = [
+		(STATUS_PENDING, "Pending"),
+		(STATUS_APPROVED, "Approved"),
+		(STATUS_REJECTED, "Rejected"),
+	]
+
+	group = models.OneToOneField(Group, on_delete=models.CASCADE, related_name="srs_submission")
+	srs_file = models.FileField(upload_to="srs_documents/")
+	uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="uploaded_srs_documents")
+	uploaded_at = models.DateTimeField(auto_now_add=True)
+	review_status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_PENDING)
+	rejection_review = models.TextField(blank=True)
+	rejected_by = models.ForeignKey(
+		User,
+		null=True,
+		blank=True,
+		on_delete=models.SET_NULL,
+		related_name="rejected_srs_submissions",
+	)
+	rejected_at = models.DateTimeField(null=True, blank=True)
+
+	def __str__(self):
+		return f"SRS Submission - Group {self.group_id}"
+
+
+class SDDSubmission(models.Model):
+	"""Student SDD submission with coordinator approval workflow."""
+	STATUS_PENDING = "pending"
+	STATUS_APPROVED = "approved"
+	STATUS_REJECTED = "rejected"
+	STATUS_CHOICES = [
+		(STATUS_PENDING, "Pending"),
+		(STATUS_APPROVED, "Approved"),
+		(STATUS_REJECTED, "Rejected"),
+	]
+
+	group = models.OneToOneField(Group, on_delete=models.CASCADE, related_name="sdd_submission")
+	sdd_file = models.FileField(upload_to="sdd_documents/")
+	uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="uploaded_sdd_documents")
+	uploaded_at = models.DateTimeField(auto_now_add=True)
+	review_status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_PENDING)
+	rejection_review = models.TextField(blank=True)
+	rejected_by = models.ForeignKey(
+		User,
+		null=True,
+		blank=True,
+		on_delete=models.SET_NULL,
+		related_name="rejected_sdd_submissions",
+	)
+	rejected_at = models.DateTimeField(null=True, blank=True)
+
+	def __str__(self):
+		return f"SDD Submission - Group {self.group_id}"
 
 
 class StudentEvaluation(models.Model):

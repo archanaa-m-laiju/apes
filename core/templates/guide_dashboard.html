@@ -540,52 +540,6 @@
                         {% endfor %}
                     {% endif %}
 
-                    <!-- SDGs -->
-                    {% if item.sdg and item.sdg.is_submitted %}
-                        <div class="mb-3">
-                            <h6 style="font-size: 16px; color: #fdba74; margin-bottom: 12px;">🎯 Sustainable Development Goals</h6>
-                            <span class="badge badge-success mb-2">Submitted</span>
-                            {% if item.sdg.created_at %}
-                                <div class="mb-2">
-                                    <small class="text-muted">Submitted: {{ item.sdg.created_at|date:"M d, Y H:i" }}</small>
-                                </div>
-                            {% endif %}
-
-                            <div style="display: grid; gap: 8px; margin-top: 12px;">
-                                {% if item.sdg.sdg1 %}
-                                    <div class="p-2" style="background: rgba(255, 255, 255, 0.03); border-radius: 6px;">
-                                        <span style="color: #e5e7eb;">{{ item.sdg.sdg1|sdg_title }}</span>
-                                    </div>
-                                {% endif %}
-                                {% if item.sdg.sdg2 %}
-                                    <div class="p-2" style="background: rgba(255, 255, 255, 0.03); border-radius: 6px;">
-                                        <span style="color: #e5e7eb;">{{ item.sdg.sdg2|sdg_title }}</span>
-                                    </div>
-                                {% endif %}
-                                {% if item.sdg.sdg3 %}
-                                    <div class="p-2" style="background: rgba(255, 255, 255, 0.03); border-radius: 6px;">
-                                        <span style="color: #e5e7eb;">{{ item.sdg.sdg3|sdg_title }}</span>
-                                    </div>
-                                {% endif %}
-                                {% if item.sdg.sdg4 %}
-                                    <div class="p-2" style="background: rgba(255, 255, 255, 0.03); border-radius: 6px;">
-                                        <span style="color: #e5e7eb;">{{ item.sdg.sdg4|sdg_title }}</span>
-                                    </div>
-                                {% endif %}
-                                {% if item.sdg.sdg5 %}
-                                    <div class="p-2" style="background: rgba(255, 255, 255, 0.03); border-radius: 6px;">
-                                        <span style="color: #e5e7eb;">{{ item.sdg.sdg5|sdg_title }}</span>
-                                    </div>
-                                {% endif %}
-                            </div>
-                        </div>
-                    {% else %}
-                        <div class="mb-3">
-                            <h6 style="font-size: 16px; color: #9ca3af; margin-bottom: 8px;">🎯 SDGs</h6>
-                            <span class="badge badge-secondary">Not Submitted</span>
-                        </div>
-                    {% endif %}
-
                     <!-- Evaluation Section -->
                     <div class="mt-4 pt-3" style="border-top: 1px solid rgba(255, 255, 255, 0.1);">
                         <h6 style="color: #fbbf24; margin-bottom: 1rem;">📊 Zeroth Evaluation</h6>

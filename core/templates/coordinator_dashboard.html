@@ -721,24 +721,6 @@
                                 </div>
                             </div>
 
-                            <!-- SDG Information -->
-                            <div class="mb-4" style="background: rgba(249, 115, 22, 0.05); padding: 1rem; border-radius: 8px; border: 1px solid rgba(249, 115, 22, 0.2);">
-                                <h6 style="color: #fdba74; margin-bottom: 0.75rem;">🌍 Sustainable Development Goals</h6>
-                                {% if item.sdg and item.sdg.is_submitted %}
-                                    <span class="badge badge-success mb-2">Submitted</span>
-                                    <small style="color: #9ca3af; display: block; margin-bottom: 0.5rem;">{{ item.sdg.created_at|date:"M d, Y H:i" }}</small>
-                                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
-                                        {% if item.sdg.sdg1 %}<span class="badge badge-info">{{ item.sdg.sdg1|sdg_title }}</span>{% endif %}
-                                        {% if item.sdg.sdg2 %}<span class="badge badge-info">{{ item.sdg.sdg2|sdg_title }}</span>{% endif %}
-                                        {% if item.sdg.sdg3 %}<span class="badge badge-info">{{ item.sdg.sdg3|sdg_title }}</span>{% endif %}
-                                        {% if item.sdg.sdg4 %}<span class="badge badge-info">{{ item.sdg.sdg4|sdg_title }}</span>{% endif %}
-                                        {% if item.sdg.sdg5 %}<span class="badge badge-info">{{ item.sdg.sdg5|sdg_title }}</span>{% endif %}
-                                    </div>
-                                {% else %}
-                                    <span class="badge badge-secondary">Not Submitted</span>
-                                {% endif %}
-                            </div>
-
                             <!-- Group Members -->
                             <div class="mb-4">
                                 <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse"
@@ -1503,6 +1485,76 @@
                                                 <div class="alert alert-warning mb-0">
                                                     Project report not uploaded yet by the group leader.
                                                 </div>
+                                                {% endif %}
+                                            </div>
+
+                                            <div class="mt-3" style="background: rgba(96, 165, 250, 0.08); padding: 1rem; border-radius: 8px; border: 1px solid rgba(96, 165, 250, 0.2);">
+                                                <h6 style="color: #93c5fd; margin-bottom: 1rem;">Software Requirement Specification (SRS)</h6>
+                                                {% if item.srs_submission %}
+                                                <div class="mb-3 p-2" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px;">
+                                                    <div style="color: #bfdbfe; font-size: 0.9rem;">
+                                                        📎 <strong>Uploaded SRS:</strong> {{ item.srs_submission.srs_file.name|cut:'srs_documents/' }}
+                                                        <a href="{% url 'download_srs_submission' item.srs_submission.id %}" class="btn btn-sm btn-success ms-2">Download</a>
+                                                    </div>
+                                                    <div style="color: #e5e7eb; margin-top: 0.5rem;">Status: {% if item.srs_submission.review_status == 'rejected' %}<strong style="color: #fca5a5;">Rejected</strong>{% elif item.srs_submission.review_status == 'approved' %}<strong style="color: #86efac;">Approved</strong>{% else %}<span style="color: #9ca3af;">Pending</span>{% endif %}</div>
+                                                    {% if item.srs_submission.review_status == 'rejected' and item.srs_submission.rejection_review %}
+                                                    <div class="alert alert-danger mt-2" style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); color: #fecaca;">
+                                                        <strong>Rejection Feedback:</strong><br>
+                                                        {{ item.srs_submission.rejection_review|linebreaksbr }}
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                                {% else %}
+                                                <div class="mb-3 alert alert-warning" style="background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.35); color: #fbbf24;">
+                                                    No SRS has been submitted yet.
+                                                </div>
+                                                {% endif %}
+                                                {% if item.srs_submission and item.srs_submission.review_status == 'pending' %}
+                                                <form method="post" action="{% url 'review_srs_submission' item.srs_submission.id %}">
+                                                    {% csrf_token %}
+                                                    <div class="d-flex gap-2 flex-wrap">
+                                                        <button type="submit" name="action" value="approve" class="btn btn-success btn-sm">Approve SRS</button>
+                                                        <button type="submit" name="action" value="reject" class="btn btn-danger btn-sm">Reject SRS</button>
+                                                    </div>
+                                                    <div class="form-group mt-2">
+                                                        <textarea name="rejection_review" class="form-control form-control-sm" rows="3" placeholder="Rejection feedback (required if rejecting)"></textarea>
+                                                    </div>
+                                                </form>
+                                                {% endif %}
+                                            </div>
+
+                                            <div class="mt-3" style="background: rgba(236, 72, 153, 0.08); padding: 1rem; border-radius: 8px; border: 1px solid rgba(236, 72, 153, 0.2);">
+                                                <h6 style="color: #f472b6; margin-bottom: 1rem;">Software Design Document (SDD)</h6>
+                                                {% if item.sdd_submission %}
+                                                <div class="mb-3 p-2" style="background: rgba(241, 245, 249, 0.08); border: 1px solid rgba(244, 114, 182, 0.2); border-radius: 8px;">
+                                                    <div style="color: #fde68a; font-size: 0.9rem;">
+                                                        📎 <strong>Uploaded SDD:</strong> {{ item.sdd_submission.sdd_file.name|cut:'sdd_documents/' }}
+                                                        <a href="{% url 'download_sdd_submission' item.sdd_submission.id %}" class="btn btn-sm btn-success ms-2">Download</a>
+                                                    </div>
+                                                    <div style="color: #e5e7eb; margin-top: 0.5rem;">Status: {% if item.sdd_submission.review_status == 'rejected' %}<strong style="color: #fca5a5;">Rejected</strong>{% elif item.sdd_submission.review_status == 'approved' %}<strong style="color: #86efac;">Approved</strong>{% else %}<span style="color: #9ca3af;">Pending</span>{% endif %}</div>
+                                                    {% if item.sdd_submission.review_status == 'rejected' and item.sdd_submission.rejection_review %}
+                                                    <div class="alert alert-danger mt-2" style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); color: #fecaca;">
+                                                        <strong>Rejection Feedback:</strong><br>
+                                                        {{ item.sdd_submission.rejection_review|linebreaksbr }}
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                                {% else %}
+                                                <div class="mb-3 alert alert-warning" style="background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.35); color: #fbbf24;">
+                                                    No SDD has been submitted yet.
+                                                </div>
+                                                {% endif %}
+                                                {% if item.sdd_submission and item.sdd_submission.review_status == 'pending' %}
+                                                <form method="post" action="{% url 'review_sdd_submission' item.sdd_submission.id %}">
+                                                    {% csrf_token %}
+                                                    <div class="d-flex gap-2 flex-wrap">
+                                                        <button type="submit" name="action" value="approve" class="btn btn-success btn-sm">Approve SDD</button>
+                                                        <button type="submit" name="action" value="reject" class="btn btn-danger btn-sm">Reject SDD</button>
+                                                    </div>
+                                                    <div class="form-group mt-2">
+                                                        <textarea name="rejection_review" class="form-control form-control-sm" rows="3" placeholder="Rejection feedback (required if rejecting)"></textarea>
+                                                    </div>
+                                                </form>
                                                 {% endif %}
                                             </div>
 

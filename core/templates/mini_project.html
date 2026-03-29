@@ -471,8 +471,9 @@
             <li><a href="#requests" class="tab-link"><i class="bi bi-inbox"></i> Requests</a></li>
             <li><a href="#guide" class="tab-link"><i class="bi bi-person-badge"></i> Guide</a></li>
             <li><a href="#abstract" class="tab-link"><i class="bi bi-file-text"></i> Abstract</a></li>
-            <li><a href="#sdg" class="tab-link"><i class="bi bi-globe"></i> SDG</a></li>
             <li><a href="#evaluation" class="tab-link"><i class="bi bi-clipboard-check"></i> Evaluation</a></li>
+            <li><a href="#srs" class="tab-link"><i class="bi bi-journal-text"></i> SRS</a></li>
+            <li><a href="#sdd" class="tab-link"><i class="bi bi-file-earmark-code"></i> SDD</a></li>
             <li><a href="#project-report" class="tab-link"><i class="bi bi-file-earmark-pdf"></i> Project Report</a></li>
         </ul>
 
@@ -697,41 +698,6 @@
                 <a class="btn btn-primary" href="/guide-request/">
                     <i class="bi bi-arrow-right"></i> Request Guide
                 </a>
-            </div>
-        </div>
-
-        <!-- SDG Tab -->
-        <div id="sdg" class="tab-content">
-            <div class="info-card">
-                <h5><i class="bi bi-globe"></i> Sustainable Development Goals (SDG)</h5>
-                
-                {% if selected_sdgs %}
-                    <p style="color: #9ca3af; margin-bottom: 20px;"><strong>Selected SDG Goals:</strong></p>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin-bottom: 20px;">
-                        {% for sdg in selected_sdgs %}
-                        <div style="background: rgba(249, 115, 22, 0.1); border: 1px solid rgba(249, 115, 22, 0.3); border-radius: 8px; padding: 15px; display: flex; align-items: center; gap: 12px;">
-                            <div style="background: linear-gradient(135deg, rgba(249, 115, 22, 0.8) 0%, rgba(217, 119, 6, 0.8) 100%); color: white; width: 45px; height: 45px; min-width: 45px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.1rem;">
-                                {{ sdg.number }}
-                            </div>
-                            <div>
-                                <p style="color: #fdba74; font-weight: 600; margin-bottom: 4px; font-size: 0.9rem;">SDG #{{ sdg.number }}</p>
-                                <p style="color: #e5e7eb; margin: 0; font-size: 0.85rem;">{{ sdg.name }}</p>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                    
-                    {% if is_leader %}
-                    <a class="btn btn-outline-secondary btn-sm" href="{% url 'sdg_submission' %}">
-                        <i class="bi bi-pencil"></i> Edit SDG Selection
-                    </a>
-                    {% endif %}
-                {% else %}
-                    <p style="color: #9ca3af; margin-bottom: 20px;">Submit your project's SDG alignment and work packages.</p>
-                    <a class="btn btn-primary" href="{% url 'sdg_submission' %}">
-                        <i class="bi bi-arrow-right"></i> Go to SDG Submission
-                    </a>
-                {% endif %}
             </div>
         </div>
 
@@ -1145,6 +1111,138 @@
             {% else %}
             <div class="info-card">
                 <p style="color: #9ca3af;">You must be in a group to access evaluation features.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- SRS Tab -->
+        <div id="srs" class="tab-content">
+            {% if group %}
+            <div class="info-card">
+                <h5><i class="bi bi-journal-text"></i> Software Requirement Specification (SRS)</h5>
+                <p style="color: #9ca3af; margin-bottom: 0;">SRS upload is enabled after Literature Review completion.</p>
+            </div>
+
+            {% if srs_submission %}
+            <div class="info-card">
+                <h5 style="color: #86efac;"><i class="bi bi-check-circle"></i> Uploaded SRS</h5>
+                <p style="margin-bottom: 10px; color: #e5e7eb;"><strong>File:</strong> {{ srs_submission.srs_file.name|cut:'srs_documents/' }}</p>
+                <p style="margin-bottom: 10px; color: #e5e7eb;"><strong>Uploaded:</strong> {{ srs_submission.uploaded_at|date:"M d, Y H:i" }}</p>
+                <p style="margin-bottom: 10px; color: #e5e7eb;"><strong>Status:</strong>
+                    {% if srs_submission.review_status == 'rejected' %}
+                    <span class="status-badge danger">Rejected</span>
+                    {% elif srs_submission.review_status == 'approved' %}
+                    <span class="status-badge success">Approved</span>
+                    {% else %}
+                    <span class="status-badge warning">Pending</span>
+                    {% endif %}
+                </p>
+                <a class="btn btn-primary" href="{% url 'download_srs_submission' srs_submission.id %}">
+                    <i class="bi bi-download"></i> Download SRS
+                </a>
+
+                {% if srs_submission.review_status == 'rejected' and srs_submission.rejection_review %}
+                <div class="alert alert-danger mt-3" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); color: #fecaca;">
+                    <strong>Rejected Review:</strong><br>
+                    {{ srs_submission.rejection_review|linebreaksbr }}
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if is_leader %}
+            <div class="info-card">
+                <h5><i class="bi bi-upload"></i> {% if srs_submission %}Replace{% else %}Upload{% endif %} SRS (PDF)</h5>
+                {% if not can_submit_srs %}
+                <div class="alert alert-warning" style="background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.35); color: #fbbf24;">
+                    SRS upload is allowed only after the Literature Review stage is complete.
+                </div>
+                {% endif %}
+                <form method="post" action="{% url 'srs_submission' %}" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="form-group-custom">
+                        <label for="srs_file">Select PDF</label>
+                        <input type="file" class="form-control" id="srs_file" name="srs_file" accept="application/pdf,.pdf" required {% if not can_submit_srs %}disabled{% endif %}>
+                    </div>
+                    <button type="submit" class="btn btn-primary" {% if not can_submit_srs %}disabled{% endif %}>
+                        <i class="bi bi-cloud-upload"></i> {% if srs_submission %}Update SRS{% else %}Upload SRS{% endif %}
+                    </button>
+                </form>
+            </div>
+            {% else %}
+            <div class="info-card">
+                <p style="color: #9ca3af; margin: 0;">Only the group leader can upload the SRS document.</p>
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="info-card">
+                <p style="color: #9ca3af; margin: 0;">You must be in a group to access SRS submission.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- SDD Tab -->
+        <div id="sdd" class="tab-content">
+            {% if group %}
+            <div class="info-card">
+                <h5><i class="bi bi-file-earmark-code"></i> Software Design Document (SDD)</h5>
+                <p style="color: #9ca3af; margin-bottom: 0;">SDD upload is enabled only after the SRS is approved.</p>
+            </div>
+
+            {% if sdd_submission %}
+            <div class="info-card">
+                <h5 style="color: #86efac;"><i class="bi bi-check-circle"></i> Uploaded SDD</h5>
+                <p style="margin-bottom: 10px; color: #e5e7eb;"><strong>File:</strong> {{ sdd_submission.sdd_file.name|cut:'sdd_documents/' }}</p>
+                <p style="margin-bottom: 10px; color: #e5e7eb;"><strong>Uploaded:</strong> {{ sdd_submission.uploaded_at|date:"M d, Y H:i" }}</p>
+                <p style="margin-bottom: 10px; color: #e5e7eb;"><strong>Status:</strong>
+                    {% if sdd_submission.review_status == 'rejected' %}
+                    <span class="status-badge danger">Rejected</span>
+                    {% elif sdd_submission.review_status == 'approved' %}
+                    <span class="status-badge success">Approved</span>
+                    {% else %}
+                    <span class="status-badge warning">Pending</span>
+                    {% endif %}
+                </p>
+                <a class="btn btn-primary" href="{% url 'download_sdd_submission' sdd_submission.id %}">
+                    <i class="bi bi-download"></i> Download SDD
+                </a>
+
+                {% if sdd_submission.review_status == 'rejected' and sdd_submission.rejection_review %}
+                <div class="alert alert-danger mt-3" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); color: #fecaca;">
+                    <strong>Rejected Review:</strong><br>
+                    {{ sdd_submission.rejection_review|linebreaksbr }}
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if is_leader %}
+            <div class="info-card">
+                <h5><i class="bi bi-upload"></i> {% if sdd_submission %}Replace{% else %}Upload{% endif %} SDD (PDF)</h5>
+                {% if not can_submit_sdd %}
+                <div class="alert alert-warning" style="background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.35); color: #fbbf24;">
+                    SDD upload is allowed only after the SRS is approved.
+                </div>
+                {% endif %}
+                <form method="post" action="{% url 'sdd_submission' %}" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="form-group-custom">
+                        <label for="sdd_file">Select PDF</label>
+                        <input type="file" class="form-control" id="sdd_file" name="sdd_file" accept="application/pdf,.pdf" required {% if not can_submit_sdd %}disabled{% endif %}>
+                    </div>
+                    <button type="submit" class="btn btn-primary" {% if not can_submit_sdd %}disabled{% endif %}>
+                        <i class="bi bi-cloud-upload"></i> {% if sdd_submission %}Update SDD{% else %}Upload SDD{% endif %}
+                    </button>
+                </form>
+            </div>
+            {% else %}
+            <div class="info-card">
+                <p style="color: #9ca3af; margin: 0;">Only the group leader can upload the SDD document.</p>
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="info-card">
+                <p style="color: #9ca3af; margin: 0;">You must be in a group to access SDD submission.</p>
             </div>
             {% endif %}
         </div>
