@@ -679,8 +679,14 @@
                                 <div class="col-md-6">
                                     <h6 style="color: #fdba74; margin-bottom: 1rem;">👥 Group Information</h6>
                                     <p class="mb-1"><strong style="color: #e5e7eb;">Group ID:</strong> {{ item.group.id }}</p>
-                                    <p class="mb-1"><strong style="color: #e5e7eb;">Leader:</strong> {{ item.group.leader.username }}
-                                        ({{ item.group.leader.first_name }} {{ item.group.leader.last_name }})</p>
+                                    <p class="mb-1"><strong style="color: #e5e7eb;">Leader:</strong>
+                                        {% if item.group.leader %}
+                                            {{ item.group.leader.get_full_name|default:item.group.leader.username }}
+                                            <a href="{% url 'change_group_leader' item.group.id %}" class="btn btn-sm btn-outline-warning ms-2" style="font-size: 0.75rem;">Change Leader</a>
+                                        {% else %}
+                                            <em>Not assigned</em>
+                                        {% endif %}
+                                    </p>
                                     <p class="mb-1"><strong style="color: #e5e7eb;">Class:</strong> {{ item.class_name|default:"-" }}</p>
                                     <p class="mb-1"><strong style="color: #e5e7eb;">Department:</strong> {{ item.department|default:"-" }}</p>
                                     <p class="mb-1"><strong style="color: #e5e7eb;">Group Size:</strong> {{ item.group_size }}</p>
@@ -708,6 +714,20 @@
                                         -
                                         {% endif %}
                                     </p>
+                                    <div class="mb-2">
+                                        <form method="post" action="{% url 'assign_guide' item.group.id %}" class="d-flex gap-2 align-items-center">
+                                            {% csrf_token %}
+                                            <select name="guide_id" class="form-control form-control-sm" required>
+                                                <option value="">Select guide</option>
+                                                {% for guide in available_guides %}
+                                                <option value="{{ guide.id }}" {% if item.assigned_guide and guide.id == item.assigned_guide.id %}selected{% endif %}>
+                                                    {{ guide.get_full_name|default:guide.username }} ({{ guide.group_count }} groups)
+                                                </option>
+                                                {% endfor %}
+                                            </select>
+                                            <button type="submit" class="btn btn-success btn-sm">{% if item.assigned_guide %}Change{% else %}Assign{% endif %}</button>
+                                        </form>
+                                    </div>
                                     <p class="mb-1"><strong style="color: #e5e7eb;">Selected Topic:</strong>
                                         {% if item.approved_abstract %}
                                         {{ item.approved_abstract.title }}
@@ -1488,6 +1508,28 @@
                                                 {% endif %}
                                             </div>
 
+                                            <div class="mt-3" style="background: rgba(139, 92, 246, 0.08); padding: 1rem; border-radius: 8px; border: 1px solid rgba(139, 92, 246, 0.2);">
+                                                <h6 style="color: #a78bfa; margin-bottom: 1rem;">Literature Review</h6>
+                                                {% if item.literature_review %}
+                                                <div class="mb-3 p-2" style="background: rgba(139, 92, 246, 0.08); border: 1px solid rgba(139, 92, 246, 0.2); border-radius: 8px;">
+                                                    <div style="color: #c4b5fd; font-size: 0.9rem;">
+                                                        📚 <strong>Uploaded Literature Review:</strong><br>
+                                                        File 1: {{ item.literature_review.file_1.name|cut:'literature_review_documents/' }}<br>
+                                                        File 2: {{ item.literature_review.file_2.name|cut:'literature_review_documents/' }}<br>
+                                                        <small>Uploaded by: {{ item.literature_review.uploaded_by.get_full_name|default:item.literature_review.uploaded_by.username }} on {{ item.literature_review.uploaded_at|date:"M d, Y H:i" }}</small>
+                                                    </div>
+                                                    <div class="mt-2">
+                                                        <a href="{% url 'download_literature_review_file' item.literature_review.id 1 %}" class="btn btn-sm btn-primary me-2">Download File 1</a>
+                                                        <a href="{% url 'download_literature_review_file' item.literature_review.id 2 %}" class="btn btn-sm btn-primary">Download File 2</a>
+                                                    </div>
+                                                </div>
+                                                {% else %}
+                                                <div class="alert alert-info mb-0" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); color: #93c5fd;">
+                                                    📚 Literature Review not submitted yet.
+                                                </div>
+                                                {% endif %}
+                                            </div>
+
                                             <div class="mt-3" style="background: rgba(96, 165, 250, 0.08); padding: 1rem; border-radius: 8px; border: 1px solid rgba(96, 165, 250, 0.2);">
                                                 <h6 style="color: #93c5fd; margin-bottom: 1rem;">Software Requirement Specification (SRS)</h6>
                                                 {% if item.srs_submission %}
@@ -1528,33 +1570,14 @@
                                                 {% if item.sdd_submission %}
                                                 <div class="mb-3 p-2" style="background: rgba(241, 245, 249, 0.08); border: 1px solid rgba(244, 114, 182, 0.2); border-radius: 8px;">
                                                     <div style="color: #fde68a; font-size: 0.9rem;">
-                                                        📎 <strong>Uploaded SDD:</strong> {{ item.sdd_submission.sdd_file.name|cut:'sdd_documents/' }}
+                                                        📎 <strong>Uploaded SDD:</strong> {{ item.sdd_submission.file.name|cut:'sdd/' }}
                                                         <a href="{% url 'download_sdd_submission' item.sdd_submission.id %}" class="btn btn-sm btn-success ms-2">Download</a>
                                                     </div>
-                                                    <div style="color: #e5e7eb; margin-top: 0.5rem;">Status: {% if item.sdd_submission.review_status == 'rejected' %}<strong style="color: #fca5a5;">Rejected</strong>{% elif item.sdd_submission.review_status == 'approved' %}<strong style="color: #86efac;">Approved</strong>{% else %}<span style="color: #9ca3af;">Pending</span>{% endif %}</div>
-                                                    {% if item.sdd_submission.review_status == 'rejected' and item.sdd_submission.rejection_review %}
-                                                    <div class="alert alert-danger mt-2" style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); color: #fecaca;">
-                                                        <strong>Rejection Feedback:</strong><br>
-                                                        {{ item.sdd_submission.rejection_review|linebreaksbr }}
-                                                    </div>
-                                                    {% endif %}
                                                 </div>
                                                 {% else %}
                                                 <div class="mb-3 alert alert-warning" style="background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.35); color: #fbbf24;">
                                                     No SDD has been submitted yet.
                                                 </div>
-                                                {% endif %}
-                                                {% if item.sdd_submission and item.sdd_submission.review_status == 'pending' %}
-                                                <form method="post" action="{% url 'review_sdd_submission' item.sdd_submission.id %}">
-                                                    {% csrf_token %}
-                                                    <div class="d-flex gap-2 flex-wrap">
-                                                        <button type="submit" name="action" value="approve" class="btn btn-success btn-sm">Approve SDD</button>
-                                                        <button type="submit" name="action" value="reject" class="btn btn-danger btn-sm">Reject SDD</button>
-                                                    </div>
-                                                    <div class="form-group mt-2">
-                                                        <textarea name="rejection_review" class="form-control form-control-sm" rows="3" placeholder="Rejection feedback (required if rejecting)"></textarea>
-                                                    </div>
-                                                </form>
                                                 {% endif %}
                                             </div>
 

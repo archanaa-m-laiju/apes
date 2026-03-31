@@ -24,26 +24,9 @@
 {% if sdd_submission %}
 <div class="report-card">
     <h5 style="color: #86efac;">Uploaded SDD</h5>
-    <p style="margin-bottom: 10px;"><strong>File:</strong> {{ sdd_submission.sdd_file.name|cut:'sdd_documents/' }}</p>
+    <p style="margin-bottom: 10px;"><strong>File:</strong> {{ sdd_submission.file.name|cut:'sdd/' }}</p>
     <p style="margin-bottom: 10px;"><strong>Uploaded:</strong> {{ sdd_submission.uploaded_at|date:"M d, Y H:i" }}</p>
-    <p style="margin-bottom: 10px;">
-        <strong>Status:</strong>
-        {% if sdd_submission.review_status == 'rejected' %}
-        <span class="text-danger">Rejected</span>
-        {% elif sdd_submission.review_status == 'approved' %}
-        <span class="text-success">Approved</span>
-        {% else %}
-        <span class="text-warning">Pending</span>
-        {% endif %}
-    </p>
     <a class="btn btn-success btn-sm" href="{% url 'download_sdd_submission' sdd_submission.id %}">Download SDD</a>
-
-    {% if sdd_submission.review_status == 'rejected' and sdd_submission.rejection_review %}
-    <div class="alert alert-danger mt-3" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); color: #fecaca;">
-        <strong>Rejected Review:</strong><br>
-        {{ sdd_submission.rejection_review|linebreaksbr }}
-    </div>
-    {% endif %}
 </div>
 {% endif %}
 

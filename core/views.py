@@ -3,13 +3,14 @@ import os
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.db.models import Prefetch, Q
+from django.db.models import Prefetch, Q, Count
 from django.http import FileResponse, HttpResponse, HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_protect
 
-from .models import Abstract, CoordinatorApproval, CoordinatorAssignment, Group, GroupMember, GroupRequest, GuideRequest, Notification, StudentProfile, FacultyProfile, GroupEvaluation, EvaluationFile, ProjectReport, StudentEvaluation, SRSSubmission, SDDSubmission
+from .models import Abstract, CoordinatorApproval, CoordinatorAssignment, Group, GroupMember, GroupRequest, GuideRequest, Notification, StudentProfile, FacultyProfile, GroupEvaluation, EvaluationFile, ProjectReport, StudentEvaluation, SRSSubmission, SDDSubmission, LiteratureReview
 
 
 def _is_student(user):
@@ -50,6 +51,9 @@ def _ensure_active_role_for_dual_faculty(request, required_role):
 	if active_role != required_role:
 		return redirect("guide_dashboard" if active_role == "guide" else "coordinator_dashboard")
 	return None
+
+# Optional recommended overload protection
+MAX_GROUPS_PER_GUIDE = 6
 
 
 def _get_group_for_user(user):
@@ -359,6 +363,7 @@ def mini_project(request):
 	assigned_guide = _get_accepted_guide_for_group(group) if group else None
 	srs_submission = SRSSubmission.objects.filter(group=group).first() if group else None
 	sdd_submission = SDDSubmission.objects.filter(group=group).first() if group else None
+	literature_review = LiteratureReview.objects.filter(group=group).first() if group else None
 	selected_topic = Abstract.objects.filter(group=group, is_final_approved=True).order_by("-submitted_at").first() if group else None
 	project_report = ProjectReport.objects.filter(group=group).first() if group else None
 	first_complete = _is_stage_completed_for_group(group, "first") if group else False
@@ -414,7 +419,8 @@ def mini_project(request):
 		"is_coordinator_approved": is_coordinator_approved,
 		"srs_submission": srs_submission,
 		"sdd_submission": sdd_submission,
-		"can_submit_srs": bool(group and group.leader_id == request.user.id and first_complete),
+		"literature_review": literature_review,
+		"can_submit_srs": bool(group and group.leader_id == request.user.id and literature_review and literature_review.guide_approved),
 		"can_submit_sdd": bool(group and group.leader_id == request.user.id and srs_submission and srs_submission.review_status == SRSSubmission.STATUS_APPROVED),
 		"assigned_guide": assigned_guide,
 		"selected_topic": selected_topic,
@@ -518,14 +524,15 @@ def srs_submission(request):
 		return redirect("mini_project")
 
 	srs_submission = SRSSubmission.objects.filter(group=group).first()
-	can_submit_srs = group.leader_id == request.user.id and _is_stage_completed_for_group(group, "first")
+	literature_review = LiteratureReview.objects.filter(group=group).first()
+	can_submit_srs = group.leader_id == request.user.id and literature_review and literature_review.guide_approved
 
 	if request.method == "POST":
 		if group.leader_id != request.user.id:
 			messages.error(request, "Only the group leader can upload the SRS document.")
 			return redirect("srs_submission")
-		if not _is_stage_completed_for_group(group, "first"):
-			messages.error(request, "SRS upload is allowed only after the Literature Review stage is complete.")
+		if not literature_review or not literature_review.guide_approved:
+			messages.error(request, "SRS upload is allowed only after Literature Review completion.")
 			return redirect("srs_submission")
 
 		srs_file = request.FILES.get("srs_file")
@@ -570,7 +577,7 @@ def srs_submission(request):
 		"srs_submission": srs_submission,
 		"is_leader": group.leader_id == request.user.id,
 		"can_submit_srs": can_submit_srs,
-		"literature_review_complete": _is_stage_completed_for_group(group, "first"),
+		"literature_review_complete": literature_review and literature_review.guide_approved,
 	}
 	return render(request, "srs_submission.html", context)
 
@@ -614,23 +621,15 @@ def sdd_submission(request):
 			return redirect("sdd_submission")
 
 		if sdd_submission:
-			if sdd_submission.sdd_file:
-				sdd_submission.sdd_file.delete(save=False)
-			sdd_submission.sdd_file = sdd_file
-			sdd_submission.uploaded_by = request.user
-			sdd_submission.uploaded_at = timezone.now()
-			sdd_submission.review_status = SDDSubmission.STATUS_PENDING
-			sdd_submission.rejection_review = ""
-			sdd_submission.rejected_by = None
-			sdd_submission.rejected_at = None
+			if sdd_submission.file:
+				sdd_submission.file.delete(save=False)
+			sdd_submission.file = sdd_file
 			sdd_submission.save()
 			messages.success(request, "SDD document updated successfully.")
 		else:
 			SDDSubmission.objects.create(
 				group=group,
-				sdd_file=sdd_file,
-				uploaded_by=request.user,
-				review_status=SDDSubmission.STATUS_PENDING,
+				file=sdd_file,
 			)
 			messages.success(request, "SDD document uploaded successfully.")
 		return redirect("sdd_submission")
@@ -643,6 +642,107 @@ def sdd_submission(request):
 		"can_submit_sdd": can_submit_sdd,
 	}
 	return render(request, "sdd_submission.html", context)
+
+
+@login_required
+def literature_review_submission(request):
+	if not _is_student(request.user):
+		messages.error(request, "Only students can upload Literature Review documents.")
+		return redirect("dashboard")
+
+	group = _get_group_for_user(request.user)
+	if not group:
+		messages.error(request, "You must be in a group to submit Literature Review.")
+		return redirect("mini_project")
+
+	# Check if user is a member of the group
+	is_group_member = GroupMember.objects.filter(group=group, user=request.user).exists()
+	if not is_group_member:
+		messages.error(request, "You are not a member of this group.")
+		return redirect("mini_project")
+
+	literature_review = LiteratureReview.objects.filter(group=group).first()
+
+	if request.method == "POST":
+		file_1 = request.FILES.get("file_1")
+		file_2 = request.FILES.get("file_2")
+
+		if not file_1 or not file_2:
+			messages.error(request, "Please upload both PDF files.")
+			return redirect("literature_review_submission")
+
+		# Validate file types
+		for file_obj, file_name in [(file_1, "File 1"), (file_2, "File 2")]:
+			file_obj_name = file_obj.name.lower()
+			if not file_obj_name.endswith(".pdf"):
+				messages.error(request, f"{file_name}: Only PDF files are allowed.")
+				return redirect("literature_review_submission")
+
+			content_type = (getattr(file_obj, "content_type", "") or "").lower()
+			if content_type and "pdf" not in content_type:
+				messages.error(request, f"{file_name}: Only PDF files are allowed.")
+				return redirect("literature_review_submission")
+
+		if literature_review:
+			# Update existing submission
+			if literature_review.file_1:
+				literature_review.file_1.delete(save=False)
+			if literature_review.file_2:
+				literature_review.file_2.delete(save=False)
+			literature_review.file_1 = file_1
+			literature_review.file_2 = file_2
+			literature_review.uploaded_by = request.user
+			literature_review.uploaded_at = timezone.now()
+			literature_review.guide_approved = True  # Mark as completed
+			literature_review.save()
+			messages.success(request, "Literature Review documents updated successfully.")
+		else:
+			# Create new submission
+			LiteratureReview.objects.create(
+				group=group,
+				file_1=file_1,
+				file_2=file_2,
+				uploaded_by=request.user,
+				guide_approved=True,  # Mark as completed
+			)
+			messages.success(request, "Literature Review documents uploaded successfully.")
+		return redirect("literature_review_submission")
+
+	context = {
+		"group": group,
+		"literature_review": literature_review,
+		"is_group_member": is_group_member,
+	}
+	return render(request, "literature_review_submission.html", context)
+
+
+@login_required
+def download_literature_review_file(request, submission_id, file_number):
+	literature_review = get_object_or_404(LiteratureReview, id=submission_id)
+	
+	# Check permissions: group members, guides, and coordinators can download
+	user_group = _get_group_for_user(request.user)
+	can_access = False
+	
+	if _is_student(request.user):
+		can_access = user_group and user_group == literature_review.group
+	elif _is_guide(request.user) or _is_coordinator(request.user):
+		can_access = True
+	
+	if not can_access:
+		messages.error(request, "You don't have permission to access this file.")
+		return redirect("dashboard")
+	
+	if file_number == 1:
+		file_field = literature_review.file_1
+		filename = f"literature_review_file1_group_{literature_review.group_id}.pdf"
+	else:
+		file_field = literature_review.file_2
+		filename = f"literature_review_file2_group_{literature_review.group_id}.pdf"
+	
+	response = FileResponse(file_field.open(), content_type='application/pdf')
+	response['Content-Disposition'] = f'attachment; filename="{filename}"'
+	return response
 
 
 @login_required
@@ -664,20 +764,21 @@ def download_sdd_submission(request, submission_id):
 	allowed = (group_for_user == group) or (_is_guide(request.user) and _get_accepted_guide_for_group(group) == request.user) or _is_coordinator(request.user)
 	if not allowed:
 		return HttpResponseForbidden("You do not have permission to download this SDD document.")
-	return FileResponse(submission.sdd_file.open("rb"), as_attachment=True, filename=os.path.basename(submission.sdd_file.name))
+	return FileResponse(submission.file.open("rb"), as_attachment=True, filename=os.path.basename(submission.file.name))
 
 
 @login_required
 def review_srs_submission(request, submission_id):
-	if not _is_coordinator(request.user):
-		return HttpResponseForbidden("Only coordinators can review SRS submissions.")
+	if not _is_guide(request.user):
+		return HttpResponseForbidden("Only guides can review SRS submissions.")
 	if request.method != "POST":
-		return redirect("coordinator_dashboard")
+		return redirect("guide_dashboard")
 
 	submission = get_object_or_404(SRSSubmission, id=submission_id)
-	if not _is_coordinator_authorized_for_group(request, submission.group):
+	# Check if the user is the assigned guide for this group
+	if submission.group.guide != request.user:
 		messages.error(request, "You are not authorized to review this submission.")
-		return redirect("coordinator_dashboard")
+		return redirect("guide_dashboard")
 
 	action = request.POST.get("action")
 	feedback = request.POST.get("rejection_review", "").strip()
@@ -690,7 +791,7 @@ def review_srs_submission(request, submission_id):
 	elif action == "reject":
 		if not feedback:
 			messages.error(request, "Feedback is required when rejecting SRS.")
-			return redirect("coordinator_dashboard")
+			return redirect("guide_dashboard")
 		submission.review_status = SRSSubmission.STATUS_REJECTED
 		submission.rejection_review = feedback
 		submission.rejected_by = request.user
@@ -698,47 +799,10 @@ def review_srs_submission(request, submission_id):
 		messages.info(request, "SRS rejected.")
 	else:
 		messages.error(request, "Invalid SRS review action.")
-		return redirect("coordinator_dashboard")
+		return redirect("guide_dashboard")
 
 	submission.save()
-	return redirect("coordinator_dashboard")
-
-
-@login_required
-def review_sdd_submission(request, submission_id):
-	if not _is_coordinator(request.user):
-		return HttpResponseForbidden("Only coordinators can review SDD submissions.")
-	if request.method != "POST":
-		return redirect("coordinator_dashboard")
-
-	submission = get_object_or_404(SDDSubmission, id=submission_id)
-	if not _is_coordinator_authorized_for_group(request, submission.group):
-		messages.error(request, "You are not authorized to review this submission.")
-		return redirect("coordinator_dashboard")
-
-	action = request.POST.get("action")
-	feedback = request.POST.get("rejection_review", "").strip()
-	if action == "approve":
-		submission.review_status = SDDSubmission.STATUS_APPROVED
-		submission.rejection_review = ""
-		submission.rejected_by = None
-		submission.rejected_at = None
-		messages.success(request, "SDD approved.")
-	elif action == "reject":
-		if not feedback:
-			messages.error(request, "Feedback is required when rejecting SDD.")
-			return redirect("coordinator_dashboard")
-		submission.review_status = SDDSubmission.STATUS_REJECTED
-		submission.rejection_review = feedback
-		submission.rejected_by = request.user
-		submission.rejected_at = timezone.now()
-		messages.info(request, "SDD rejected.")
-	else:
-		messages.error(request, "Invalid SDD review action.")
-		return redirect("coordinator_dashboard")
-
-	submission.save()
-	return redirect("coordinator_dashboard")
+	return redirect("guide_dashboard")
 
 
 @login_required
@@ -883,7 +947,7 @@ def download_project_report(request, report_id):
 		allowed = True
 	elif group.leader_id == request.user.id or GroupMember.objects.filter(group=group, user=request.user).exists():
 		allowed = True
-	elif _is_guide(request.user) and GuideRequest.objects.filter(group=group, guide=request.user, status=GuideRequest.STATUS_ACCEPTED).exists():
+	elif _is_guide(request.user) and group.guide_id == request.user.id:
 		allowed = True
 	elif _is_coordinator(request.user):
 		student_profile = getattr(group.leader, "student_profile", None)
@@ -952,62 +1016,8 @@ def group_requests(request):
 
 @login_required
 def guide_request(request):
-	if not _is_student(request.user):
-		messages.error(request, "Only students can access this page.")
-		return redirect("dashboard")
-
-	group = _get_group_for_user(request.user)
-	if not group or group.leader != request.user:
-		messages.error(request, "Only group leaders can request a guide.")
-		return redirect("mini_project")
-
-	group_size = _get_group_size(group)
-	if group_size < 4:
-		messages.error(request, "Group must have at least 4 members to request a guide.")
-		return redirect("mini_project")
-
-	# Check if any coordinator has approved the group
-	coordinator_approvals = CoordinatorApproval.objects.filter(group=group)
-	is_coordinator_approved = any(approval.status == CoordinatorApproval.STATUS_APPROVED for approval in coordinator_approvals)
-	
-	if not coordinator_approvals.exists():
-		messages.error(request, "Your group must be approved by a coordinator before requesting a guide.")
-		return redirect("mini_project")
-	
-	if not is_coordinator_approved:
-		messages.error(request, "Your group must be approved by a coordinator before requesting a guide.")
-		return redirect("mini_project")
-
-	existing_request = GuideRequest.objects.filter(group=group, status__in=[GuideRequest.STATUS_PENDING, GuideRequest.STATUS_ACCEPTED]).first()
-
-	if request.method == "POST":
-		guide_id = request.POST.get("guide_id")
-		message = request.POST.get("message", "").strip()
-		if existing_request:
-			messages.error(request, "A guide request already exists for this group.")
-			return redirect("guide_request")
-		if not guide_id:
-			messages.error(request, "Select a guide.")
-			return redirect("guide_request")
-		if not message:
-			messages.error(request, "Message is required.")
-			return redirect("guide_request")
-		guide_user = get_object_or_404(User, id=guide_id)
-		if not _is_guide(guide_user):
-			messages.error(request, "Selected user is not a guide.")
-			return redirect("guide_request")
-		GuideRequest.objects.create(group=group, guide=guide_user, message=message)
-		messages.success(request, "Guide request sent.")
-		return redirect("guide_request")
-
-	guides = User.objects.filter(faculty_profile__is_guide=True)
-	context = {
-		"guides": guides,
-		"group": group,
-		"group_size": group_size,
-		"existing_request": existing_request,
-	}
-	return render(request, "guide_request.html", context)
+	messages.info(request, "Guide request workflow is deprecated. Coordinators must assign guides.")
+	return redirect("mini_project")
 
 
 @login_required
@@ -1020,12 +1030,24 @@ def guide_dashboard(request):
 	if role_redirect:
 		return role_redirect
 
-	accepted_requests = GuideRequest.objects.filter(
-		guide=request.user,
-		status=GuideRequest.STATUS_ACCEPTED,
-	).select_related("group", "group__leader")
+	assigned_groups_qs = Group.objects.filter(
+		guide=request.user
+	).select_related("leader", "leader__student_profile").prefetch_related(
+		Prefetch(
+			"groupmember_set",
+			queryset=GroupMember.objects.select_related("user", "user__student_profile").order_by("id"),
+		),
+		Prefetch(
+			"abstracts",
+			queryset=Abstract.objects.select_related("reviewed_by").order_by("-submitted_at"),
+		),
+		Prefetch(
+			"coordinator_approvals",
+			queryset=CoordinatorApproval.objects.select_related("coordinator", "coordinator__faculty_profile").order_by("id"),
+		),
+	)
 
-	group_ids = accepted_requests.values_list("group_id", flat=True)
+	group_ids = assigned_groups_qs.values_list("id", flat=True)
 	report_by_group_id = {
 		report.group_id: report
 		for report in ProjectReport.objects.filter(group_id__in=group_ids)
@@ -1048,7 +1070,6 @@ def guide_dashboard(request):
 			"second": EvaluationFile.objects.filter(group_id=group_id, stage="second").first(),
 			"final": EvaluationFile.objects.filter(group_id=group_id, stage="final").first(),
 		}
-		
 		# Get student evaluations for this group
 		group_members = GroupMember.objects.filter(group_id=group_id).select_related("user")
 		student_evaluations_by_group[group_id] = {
@@ -1065,9 +1086,9 @@ def guide_dashboard(request):
 			_ensure_final_result(eval_obj)
 
 	assigned_groups = []
-	for guide_request in accepted_requests:
-		members = list(GroupMember.objects.filter(group=guide_request.group).select_related("user"))
-		student_eval_map = student_evaluations_by_group.get(guide_request.group_id, {})
+	for group in assigned_groups_qs.order_by("id"):
+		members = list(group.groupmember_set.all())
+		student_eval_map = student_evaluations_by_group.get(group.id, {})
 		first_eval_map = student_eval_map.get("first", {})
 		second_eval_map = student_eval_map.get("second", {})
 		esestatus = {}
@@ -1077,10 +1098,13 @@ def guide_dashboard(request):
 			esestatus[member.user.id] = {"allowed": allowed, "message": reason}
 		blocked_reasons = [status["message"] for status in esestatus.values() if not status["allowed"] and status["message"]]
 		assigned_groups.append({
-			"group": guide_request.group,
-			"project_report": report_by_group_id.get(guide_request.group_id),
-			"evaluations": evaluations_by_group.get(guide_request.group_id, {}),
-			"evaluation_files": evaluation_files_by_group.get(guide_request.group_id, {}),
+			"group": group,
+			"literature_review": LiteratureReview.objects.filter(group=group).first(),
+			"srs_submission": SRSSubmission.objects.filter(group=group).first(),
+			"sdd_submission": SDDSubmission.objects.filter(group=group).first(),
+			"project_report": report_by_group_id.get(group.id),
+			"evaluations": evaluations_by_group.get(group.id, {}),
+			"evaluation_files": evaluation_files_by_group.get(group.id, {}),
 			"student_evaluations": student_eval_map,
 			"members": members,
 			"first_complete": all(eval_obj and eval_obj.finalized for eval_obj in first_eval_map.values()),
@@ -1090,11 +1114,7 @@ def guide_dashboard(request):
 			"ese_block_reason": blocked_reasons[0] if blocked_reasons else "",
 		})
 
-	# Get pending guide requests for the requests tab
-	pending_requests = GuideRequest.objects.filter(
-		guide=request.user,
-		status=GuideRequest.STATUS_PENDING
-	).select_related("group", "group__leader", "group__leader__student_profile")
+	pending_requests = []
 
 	# Get abstracts for the review abstracts tab
 	all_abstracts = Abstract.objects.filter(group_id__in=group_ids).select_related("group", "group__leader").order_by("-submitted_at")
@@ -1123,30 +1143,13 @@ def guide_requests(request):
 	if role_redirect:
 		return role_redirect
 
-	if request.method == "POST":
-		request_id = request.POST.get("request_id")
-		action = request.POST.get("action")
-		guide_request_obj = get_object_or_404(GuideRequest, id=request_id, guide=request.user)
-
-		if action == "accept":
-			guide_request_obj.status = GuideRequest.STATUS_ACCEPTED
-			guide_request_obj.save()
-			messages.success(request, "Request accepted.")
-		elif action == "reject":
-			guide_request_obj.status = GuideRequest.STATUS_REJECTED
-			guide_request_obj.save()
-			messages.info(request, "Request rejected.")
-		return HttpResponseRedirect(reverse("guide_dashboard") + "#requests")
-
-	pending_requests = GuideRequest.objects.filter(guide=request.user, status=GuideRequest.STATUS_PENDING).select_related("group", "group__leader", "group__leader__student_profile")
-	context = {"pending_requests": pending_requests}
-	return render(request, "guide_requests.html", context)
+	messages.info(request, "Guide request workflow is deprecated. Coordinators assign guides directly.")
+	return redirect("guide_dashboard")
 
 
 def _get_accepted_guide_for_group(group):
-	"""Get the accepted guide for a group, if any."""
-	accepted_request = GuideRequest.objects.filter(group=group, status=GuideRequest.STATUS_ACCEPTED).first()
-	return accepted_request.guide if accepted_request else None
+	"""Get the assigned guide for a group, if any."""
+	return getattr(group, "guide", None)
 
 
 def _is_coordinator_authorized_for_group(request, group):
@@ -1285,14 +1288,11 @@ def faculty_abstracts(request):
 	if role_redirect:
 		return role_redirect
 
-	# Get all groups where this faculty has accepted guide requests
-	accepted_groups = GuideRequest.objects.filter(
-		guide=request.user,
-		status=GuideRequest.STATUS_ACCEPTED
-	).values_list("group_id", flat=True)
+	# Get all groups where this faculty is the assigned guide
+	assigned_group_ids = Group.objects.filter(guide=request.user).values_list("id", flat=True)
 
 	# Get all abstracts from these groups
-	all_abstracts = Abstract.objects.filter(group_id__in=accepted_groups).select_related("group", "group__leader").order_by("-submitted_at")
+	all_abstracts = Abstract.objects.filter(group_id__in=assigned_group_ids).select_related("group", "group__leader").order_by("-submitted_at")
 
 	pending_abstracts = all_abstracts.filter(guide_status=Abstract.STATUS_PENDING)
 	approved_abstracts = all_abstracts.filter(guide_status=Abstract.STATUS_APPROVED)
@@ -1318,14 +1318,8 @@ def review_abstract(request, abstract_id):
 
 	abstract = get_object_or_404(Abstract, id=abstract_id)
 
-	# Verify this faculty is the accepted guide for this group
-	guide_request = GuideRequest.objects.filter(
-		group=abstract.group,
-		guide=request.user,
-		status=GuideRequest.STATUS_ACCEPTED
-	).first()
-
-	if not guide_request:
+	# Verify this faculty is the assigned guide for this group
+	if abstract.group.guide_id != request.user.id:
 		messages.error(request, "You are not the assigned guide for this group.")
 		return redirect("faculty_abstracts")
 
@@ -1384,12 +1378,7 @@ def download_abstract(request, abstract_id):
 		has_access = group and group.id == abstract.group.id
 
 	elif _is_guide(request.user):
-		guide_request = GuideRequest.objects.filter(
-			group=abstract.group,
-			guide=request.user,
-			status=GuideRequest.STATUS_ACCEPTED
-		).exists()
-		has_access = guide_request
+		has_access = abstract.group.guide_id == request.user.id
 
 	elif _is_coordinator(request.user):
 		has_access = CoordinatorApproval.objects.filter(
@@ -1598,10 +1587,6 @@ def coordinator_dashboard(request):
 			queryset=GroupMember.objects.select_related("user", "user__student_profile").order_by("id"),
 		),
 		Prefetch(
-			"guiderequest_set",
-			queryset=GuideRequest.objects.select_related("guide").order_by("-id"),
-		),
-		Prefetch(
 			"abstracts",
 			queryset=Abstract.objects.select_related("reviewed_by").order_by("-submitted_at"),
 		),
@@ -1621,16 +1606,13 @@ def coordinator_dashboard(request):
 	group_details = []
 	for group in groups_queryset.order_by("id"):
 		members = list(group.groupmember_set.all())
-		guide_requests = list(group.guiderequest_set.all())
-		latest_guide_request = guide_requests[0] if guide_requests else None
-		assigned_guide = None
-		if latest_guide_request and latest_guide_request.status == GuideRequest.STATUS_ACCEPTED:
-			assigned_guide = latest_guide_request.guide
+		assigned_guide = group.guide
 
 		abstracts = list(group.abstracts.all())
 		approved_abstract = next((item for item in abstracts if item.is_final_approved), None)
 		srs_submission = SRSSubmission.objects.filter(group=group).first()
 		sdd_submission = SDDSubmission.objects.filter(group=group).first()
+		literature_review = LiteratureReview.objects.filter(group=group).first()
 		project_report = report_by_group_id.get(group.id)
 
 		# Get evaluations for this group
@@ -1713,10 +1695,10 @@ def coordinator_dashboard(request):
 			"coordinator_approval": coordinator_approval,
 			"coordinator_approvals": coordinator_approvals,
 			"is_coordinator_approved": is_coordinator_approved,
-			"latest_guide_request": latest_guide_request,
 			"assigned_guide": assigned_guide,
 			"approved_abstract": approved_abstract,
 			"project_report": project_report,
+			"literature_review": literature_review,
 			"srs_submission": srs_submission,
 			"sdd_submission": sdd_submission,
 			"evaluations": group_evaluations,
@@ -1748,15 +1730,75 @@ def coordinator_dashboard(request):
 		group__leader__student_profile__student_class__name__in=assigned_classes,
 	).select_related("group", "group__leader").order_by("-submitted_at")
 
+	available_guides = User.objects.filter(faculty_profile__is_guide=True)
+	if coordinator_dept:
+		available_guides = available_guides.filter(faculty_profile__department=coordinator_dept)
+	available_guides = available_guides.annotate(group_count=Count("assigned_groups")).order_by("username")
+
 	context = {
 		"pending_approvals": pending_approvals,
 		"faculty_profile": faculty_profile,
 		"assigned_classes": assigned_classes,
 		"group_details": group_details,
 		"coordinator_pending_abstracts": coordinator_pending_abstracts,
+		"available_guides": available_guides,
 		"is_dual_role": _has_dual_faculty_roles(request.user),
 	}
 	return render(request, "coordinator_dashboard.html", context)
+
+
+@login_required
+def assign_guide(request, group_id):
+	if not _is_coordinator(request.user):
+		return HttpResponseForbidden("Only coordinators can assign guides.")
+
+	role_redirect = _ensure_active_role_for_dual_faculty(request, "coordinator")
+	if role_redirect:
+		return role_redirect
+
+	group = get_object_or_404(Group, id=group_id)
+	if not _is_coordinator_authorized_for_group(request, group):
+		return HttpResponseForbidden("You are not authorized to manage this group.")
+
+	student_profile = getattr(group.leader, "student_profile", None)
+	student_class = getattr(student_profile, "student_class", None)
+	student_dept = getattr(student_profile, "department", None)
+
+	# Filter guides by department (and optional class filter semantics)
+	guides = User.objects.filter(faculty_profile__is_guide=True)
+	if student_dept:
+		guides = guides.filter(faculty_profile__department=student_dept)
+
+	# annotate active group load
+	guides = guides.annotate(group_count=Count("assigned_groups"))
+
+	if request.method == "POST":
+		selected_guide_id = request.POST.get("guide_id")
+		if not selected_guide_id:
+			messages.error(request, "Please select a guide to assign.")
+			return redirect("assign_guide", group_id=group.id)
+
+		selected_guide = get_object_or_404(User, id=selected_guide_id, faculty_profile__is_guide=True)
+		if group.guide_id == selected_guide.id:
+			messages.info(request, "This guide is already assigned to the group.")
+			return redirect("coordinator_dashboard")
+
+		if MAX_GROUPS_PER_GUIDE and selected_guide.assigned_groups.count() >= MAX_GROUPS_PER_GUIDE:
+			messages.error(request, f"Guide {selected_guide.get_full_name() or selected_guide.username} is already assigned to the maximum number of groups ({MAX_GROUPS_PER_GUIDE}).")
+			return redirect("assign_guide", group_id=group.id)
+
+		group.guide = selected_guide
+		group.save(update_fields=["guide"])
+		messages.success(request, f"Guide assigned: {selected_guide.get_full_name() or selected_guide.username}.")
+		return redirect("coordinator_dashboard")
+
+	context = {
+		"group": group,
+		"guides": guides.order_by("user__username"),
+		"student_class": student_class,
+		"student_dept": student_dept,
+	}
+	return render(request, "assign_guide.html", context)
 
 
 @login_required
@@ -1881,7 +1923,7 @@ def submit_guide_evaluation(request, group_id, stage):
 	group = get_object_or_404(Group, id=group_id)
 	
 	# Verify the guide is assigned to this group
-	if not GuideRequest.objects.filter(group=group, guide=request.user, status=GuideRequest.STATUS_ACCEPTED).exists():
+	if group.guide_id != request.user.id:
 		messages.error(request, "You are not the guide for this group.")
 		return redirect("guide_dashboard")
 
@@ -2062,11 +2104,7 @@ def download_evaluation_file(request, file_id):
 		is_authorized = True
 	
 	# Guide of the group can download
-	if _is_guide(user) and GuideRequest.objects.filter(
-		group=eval_file.group, 
-		guide=user, 
-		status=GuideRequest.STATUS_ACCEPTED
-	).exists():
+	if _is_guide(user) and eval_file.group.guide_id == user.id:
 		is_authorized = True
 	
 	# Coordinator can download if same department
@@ -2402,7 +2440,7 @@ def submit_guide_ese(request, group_id):
 
 	group = get_object_or_404(Group, id=group_id)
 
-	if not GuideRequest.objects.filter(group=group, guide=request.user, status=GuideRequest.STATUS_ACCEPTED).exists():
+	if group.guide_id != request.user.id:
 		messages.error(request, "You are not the assigned guide for this group.")
 		return redirect("guide_dashboard")
 
@@ -2496,7 +2534,7 @@ def submit_guide_student_evaluation(request, group_id, stage):
 	group = get_object_or_404(Group, id=group_id)
 	
 	# Verify the guide is assigned to this group
-	if not GuideRequest.objects.filter(group=group, guide=request.user, status=GuideRequest.STATUS_ACCEPTED).exists():
+	if group.guide_id != request.user.id:
 		messages.error(request, "You are not the guide for this group.")
 		return redirect("guide_dashboard")
 
@@ -2567,11 +2605,7 @@ def submit_final_guide_evaluation(request, group_id):
 
 	group = get_object_or_404(Group, id=group_id)
 
-	if not GuideRequest.objects.filter(
-		group=group,
-		guide=request.user,
-		status=GuideRequest.STATUS_ACCEPTED,
-	).exists():
+	if group.guide_id != request.user.id:
 		messages.error(request, "You are not the guide for this group.")
 		return redirect("guide_dashboard")
 
@@ -2780,5 +2814,81 @@ def submit_coordinator_student_evaluation(request, group_id, stage):
 
 		messages.success(request, f"{stage.capitalize()} Evaluation submitted successfully for all students!")
 		return redirect("coordinator_dashboard")
+
+
+@login_required
+@csrf_protect
+def change_group_leader(request, group_id):
+	"""Allow any group member to change the group leader."""
+	from django.middleware.csrf import get_token
+	get_token(request)  # Ensure CSRF token is available
+	
+	group = get_object_or_404(Group, id=group_id)
+
+	# Check permissions: any group member can change leader
+	if not GroupMember.objects.filter(group=group, user=request.user).exists():
+		messages.error(request, "You are not a member of this group.")
+		return redirect("dashboard")
+
+	# Check if evaluation has started - prevent leader changes if evaluation has begun
+	if GroupEvaluation.objects.filter(group=group).exists():
+		messages.error(request, "Cannot change group leader after evaluation has started.")
+		return redirect("dashboard")
+
+	# Get group members for the dropdown
+	group_members = GroupMember.objects.filter(group=group).select_related('user')
+
+	if request.method == "POST":
+		new_leader_id = request.POST.get("new_leader")
+		if not new_leader_id:
+			messages.error(request, "Please select a new leader.")
+			return redirect("change_group_leader", group_id=group.id)
+
+		try:
+			new_leader = User.objects.get(id=new_leader_id)
+		except User.DoesNotExist:
+			messages.error(request, "Invalid user selected.")
+			return redirect("change_group_leader", group_id=group.id)
+
+		# Validate that new leader is a group member
+		if not GroupMember.objects.filter(group=group, user=new_leader).exists():
+			messages.error(request, "Selected user is not a member of this group.")
+			return redirect("change_group_leader", group_id=group.id)
+
+		# Prevent setting the same leader
+		if group.leader == new_leader:
+			messages.info(request, "This user is already the group leader.")
+			return redirect("change_group_leader", group_id=group.id)
+
+		# Log the change (optional feature)
+		previous_leader = group.leader
+
+		# Update the leader
+		group.leader = new_leader
+		group.save()
+
+		# Optional: Create notification for the change
+		if previous_leader:
+			Notification.objects.create(
+				recipient=new_leader,
+				notif_type=Notification.NOTIF_GENERAL,
+				message=f"You have been assigned as the leader of your group.",
+			)
+			if previous_leader != new_leader:
+				Notification.objects.create(
+					recipient=previous_leader,
+					notif_type=Notification.NOTIF_GENERAL,
+					message=f"You are no longer the leader of your group. {new_leader.get_full_name() or new_leader.username} is now the leader.",
+				)
+
+		messages.success(request, f"Group leader changed to {new_leader.get_full_name() or new_leader.username}.")
+		return redirect("dashboard")
+
+	context = {
+		"group": group,
+		"group_members": group_members,
+		"current_leader": group.leader,
+	}
+	return render(request, "change_group_leader.html", context)
 
 	return redirect("coordinator_dashboard")

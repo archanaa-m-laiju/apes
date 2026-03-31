@@ -61,8 +61,18 @@ class FacultyProfile(models.Model):
 
 
 class Group(models.Model):
-	leader = models.ForeignKey(User, on_delete=models.CASCADE, related_name="leading_groups")
+	leader = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="led_groups")
+	guide = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="assigned_groups")
 	created_at = models.DateTimeField(auto_now_add=True)
+
+	def clean(self):
+		from django.core.exceptions import ValidationError
+		if self.leader and self.leader not in [member.user for member in self.groupmember_set.all()]:
+			raise ValidationError("Group leader must be a member of the group.")
+
+	def save(self, *args, **kwargs):
+		self.clean()
+		super().save(*args, **kwargs)
 
 
 class GroupMember(models.Model):
@@ -172,10 +182,12 @@ class Notification(models.Model):
 	NOTIF_COORDINATOR_FORWARD = "coordinator_forward"
 	NOTIF_PRESENTATION_READY = "presentation_ready"
 	NOTIF_FINAL_APPROVAL = "final_approval"
+	NOTIF_GENERAL = "general"
 	NOTIF_TYPE_CHOICES = [
 		(NOTIF_COORDINATOR_FORWARD, "Coordinator Forwarded Project"),
 		(NOTIF_PRESENTATION_READY, "Project Ready for Presentation Approval"),
 		(NOTIF_FINAL_APPROVAL, "Final Project Requires Approval"),
+		(NOTIF_GENERAL, "General Notification"),
 	]
 
 	recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notifications")
@@ -375,33 +387,26 @@ class SRSSubmission(models.Model):
 
 
 class SDDSubmission(models.Model):
-	"""Student SDD submission with coordinator approval workflow."""
-	STATUS_PENDING = "pending"
-	STATUS_APPROVED = "approved"
-	STATUS_REJECTED = "rejected"
-	STATUS_CHOICES = [
-		(STATUS_PENDING, "Pending"),
-		(STATUS_APPROVED, "Approved"),
-		(STATUS_REJECTED, "Rejected"),
-	]
-
+	"""Student SDD submission."""
 	group = models.OneToOneField(Group, on_delete=models.CASCADE, related_name="sdd_submission")
-	sdd_file = models.FileField(upload_to="sdd_documents/")
-	uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="uploaded_sdd_documents")
-	uploaded_at = models.DateTimeField(auto_now_add=True)
-	review_status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_PENDING)
-	rejection_review = models.TextField(blank=True)
-	rejected_by = models.ForeignKey(
-		User,
-		null=True,
-		blank=True,
-		on_delete=models.SET_NULL,
-		related_name="rejected_sdd_submissions",
-	)
-	rejected_at = models.DateTimeField(null=True, blank=True)
+	file = models.FileField(upload_to="sdd/", null=True, blank=True)
+	uploaded_at = models.DateTimeField(auto_now=True)
 
 	def __str__(self):
 		return f"SDD Submission - Group {self.group_id}"
+
+
+class LiteratureReview(models.Model):
+	"""Literature Review submission with two PDF files per group."""
+	group = models.OneToOneField(Group, on_delete=models.CASCADE, related_name="literature_review")
+	file_1 = models.FileField(upload_to="literature_review_documents/")
+	file_2 = models.FileField(upload_to="literature_review_documents/")
+	uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="uploaded_literature_reviews")
+	uploaded_at = models.DateTimeField(auto_now_add=True)
+	guide_approved = models.BooleanField(default=False)
+
+	def __str__(self):
+		return f"Literature Review - Group {self.group_id}"
 
 
 class StudentEvaluation(models.Model):
@@ -726,5 +731,38 @@ class StudentEvaluation(models.Model):
 	def is_completed(self):
 		"""Returns True if guide and both coordinators have submitted and finalized."""
 		return self.second_eval_completed and self.finalized
+
+
+# Signal handlers for automatic leader reassignment
+from django.db.models.signals import pre_delete
+from django.dispatch import receiver
+
+@receiver(pre_delete, sender=GroupMember)
+def handle_member_removal(sender, instance, **kwargs):
+	"""Automatically reassign group leader when a member is removed."""
+	group = instance.group
+	removed_user = instance.user
+
+	# If the removed user is the current leader, assign a new leader
+	if group.leader == removed_user:
+		# Get remaining members
+		remaining_members = GroupMember.objects.filter(group=group).exclude(user=removed_user)
+
+		if remaining_members.exists():
+			# Assign the first remaining member as leader
+			new_leader = remaining_members.first().user
+			group.leader = new_leader
+			group.save()
+
+			# Create notification for the new leader
+			Notification.objects.create(
+				recipient=new_leader,
+				notif_type=Notification.NOTIF_GENERAL,
+				message=f"You have been automatically assigned as the leader of your group since the previous leader left.",
+			)
+		else:
+			# No members left, set leader to None
+			group.leader = None
+			group.save()
 
 

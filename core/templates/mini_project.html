@@ -37,9 +37,10 @@
         left: 0;
         top: 0;
         height: 100vh;
-        overflow-y: auto;
         border-right: 1px solid rgba(255, 255, 255, 0.1);
         z-index: 1000;
+        display: flex;
+        flex-direction: column;
     }
 
     .sidebar::before {
@@ -57,6 +58,7 @@
         padding: 0 20px 30px;
         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         margin-bottom: 20px;
+        flex-shrink: 0;
     }
 
     .sidebar-brand h5 {
@@ -71,6 +73,9 @@
         list-style: none;
         padding: 0;
         margin: 0;
+        flex: 1;
+        overflow-y: auto;
+        padding-bottom: 20px;
     }
 
     .sidebar-menu li {
@@ -101,50 +106,43 @@
         font-size: 18px;
     }
 
-    .sidebar-footer {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        padding: 20px;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-        background: rgba(13, 15, 21, 0.95);
+    .sidebar-divider {
+        height: 1px;
+        background: rgba(255, 255, 255, 0.1);
+        margin: 10px 20px;
     }
 
-    .sidebar-footer .btn {
-        width: 100%;
-        margin-bottom: 10px;
-        padding: 12px;
-        border-radius: 8px;
-        font-weight: 500;
-        transition: all 0.3s ease;
-        border: none;
+    .sidebar-link {
         display: flex;
         align-items: center;
-        justify-content: center;
-        gap: 8px;
+        padding: 15px 20px;
+        color: #9ca3af;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        border-left: 4px solid transparent;
+        cursor: pointer;
+        width: 100%;
+        background: none;
+        border: none;
+        text-align: left;
+        font-family: inherit;
+        font-size: inherit;
     }
 
-    .btn-profile {
-        background: rgba(59, 130, 246, 0.15);
-        color: #93c5fd;
+    .sidebar-link:hover {
+        background: rgba(249, 115, 22, 0.15);
+        color: #fdba74;
+        border-left-color: #fb923c;
+        padding-left: 24px;
     }
 
-    .btn-profile:hover {
-        background: rgba(59, 130, 246, 0.25);
-        color: #bfdbfe;
-        transform: translateY(-2px);
-    }
-
-    .btn-logout {
-        background: rgba(239, 68, 68, 0.15);
+    .sidebar-logout {
         color: #fca5a5;
     }
 
-    .btn-logout:hover {
-        background: rgba(239, 68, 68, 0.25);
+    .sidebar-logout:hover {
+        background: rgba(239, 68, 68, 0.15);
         color: #fecaca;
-        transform: translateY(-2px);
     }
 
     .main-content {
@@ -471,23 +469,22 @@
             <li><a href="#requests" class="tab-link"><i class="bi bi-inbox"></i> Requests</a></li>
             <li><a href="#guide" class="tab-link"><i class="bi bi-person-badge"></i> Guide</a></li>
             <li><a href="#abstract" class="tab-link"><i class="bi bi-file-text"></i> Abstract</a></li>
-            <li><a href="#evaluation" class="tab-link"><i class="bi bi-clipboard-check"></i> Evaluation</a></li>
+            <li><a href="#literature-review" class="tab-link"><i class="bi bi-book"></i> Literature Review</a></li>
             <li><a href="#srs" class="tab-link"><i class="bi bi-journal-text"></i> SRS</a></li>
             <li><a href="#sdd" class="tab-link"><i class="bi bi-file-earmark-code"></i> SDD</a></li>
             <li><a href="#project-report" class="tab-link"><i class="bi bi-file-earmark-pdf"></i> Project Report</a></li>
+            <li><a href="#evaluation" class="tab-link"><i class="bi bi-clipboard-check"></i> Evaluation</a></li>
+            <li class="sidebar-divider"></li>
+            <li><a href="{% url 'profile' %}" class="sidebar-link"><i class="bi bi-person-circle"></i> Profile</a></li>
+            <li>
+                <form method="post" action="{% url 'logout' %}" style="margin: 0;">
+                    {% csrf_token %}
+                    <button type="submit" class="sidebar-link sidebar-logout">
+                        <i class="bi bi-box-arrow-right"></i> Logout
+                    </button>
+                </form>
+            </li>
         </ul>
-
-        <div class="sidebar-footer">
-            <a href="{% url 'profile' %}" class="btn btn-profile">
-                <i class="bi bi-person-circle"></i> Profile
-            </a>
-            <form method="post" action="{% url 'logout' %}" style="margin: 0;">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-logout">
-                    <i class="bi bi-box-arrow-right"></i> Logout
-                </button>
-            </form>
-        </div>
     </div>
 
     <!-- Main Content -->
@@ -539,10 +536,18 @@
                 <h5><i class="bi bi-info-circle"></i> Group Status</h5>
                 {% if group %}
                 <div style="background: rgba(255, 255, 255, 0.03); padding: 15px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
-                    <p style="margin-bottom: 10px; color: #e5e7eb;"><strong>Leader:</strong> {{ group.leader.username }}</p>
+                    <p style="margin-bottom: 10px; color: #e5e7eb;">
+                        <strong>Leader:</strong>
+                        {% if group.leader %}
+                            {{ group.leader.get_full_name|default:group.leader.username }}
+                            <a href="{% url 'change_group_leader' group.id %}" class="btn btn-sm btn-outline-primary ms-2" style="font-size: 0.8rem;">Change Leader</a>
+                        {% else %}
+                            <em>Not assigned</em>
+                        {% endif %}
+                    </p>
                     <p style="margin-bottom: 10px; color: #e5e7eb;"><strong>Group Size:</strong> {{ group_size }} / 5</p>
                     {% if group_ready %}
-                    <span class="status-badge success">✓ Eligible to request guide</span>
+                    <span class="status-badge success">✓ Eligible for coordinator guide assignment</span>
                     {% else %}
                     <span class="status-badge warning">⚠ Minimum size 4 required</span>
                     {% endif %}
@@ -693,11 +698,13 @@
         <!-- Guide Tab -->
         <div id="guide" class="tab-content">
             <div class="info-card">
-                <h5><i class="bi bi-person-badge"></i> Request Guide</h5>
-                <p style="color: #9ca3af; margin-bottom: 20px;">Submit a request to assign a guide to your group.</p>
-                <a class="btn btn-primary" href="/guide-request/">
-                    <i class="bi bi-arrow-right"></i> Request Guide
-                </a>
+                <h5><i class="bi bi-person-badge"></i> Guide Assignment</h5>
+                <p style="color: #9ca3af; margin-bottom: 20px;">Guide requests are deprecated. Coordinators assign guides directly.</p>
+                {% if assigned_guide %}
+                    <p style="color: #e5e7eb;">Assigned guide: <strong>{{ assigned_guide.get_full_name|default:assigned_guide.username }}</strong></p>
+                {% else %}
+                    <p style="color: #9ca3af;">No guide assigned yet.</p>
+                {% endif %}
             </div>
         </div>
 
@@ -721,6 +728,57 @@
                     </a>
                 </div>
             </div>
+        </div>
+
+        <!-- Literature Review Tab -->
+        <div id="literature-review" class="tab-content">
+            {% if group %}
+            <div class="info-card">
+                <h5><i class="bi bi-book"></i> Literature Review</h5>
+                <p style="color: #9ca3af; margin-bottom: 0;">Submit your Literature Review documents (two PDF files).</p>
+            </div>
+
+            {% if literature_review %}
+            <div class="info-card">
+                <h5 style="color: #86efac;"><i class="bi bi-check-circle"></i> Literature Review Submitted</h5>
+                <p style="margin-bottom: 10px; color: #e5e7eb;"><strong>File 1:</strong> {{ literature_review.file_1.name|cut:'literature_review_documents/' }}</p>
+                <p style="margin-bottom: 10px; color: #e5e7eb;"><strong>File 2:</strong> {{ literature_review.file_2.name|cut:'literature_review_documents/' }}</p>
+                <p style="margin-bottom: 10px; color: #e5e7eb;"><strong>Uploaded by:</strong> {{ literature_review.uploaded_by.get_full_name|default:literature_review.uploaded_by.username }}</p>
+                <p style="margin-bottom: 10px; color: #e5e7eb;"><strong>Uploaded:</strong> {{ literature_review.uploaded_at|date:"M d, Y H:i" }}</p>
+                <div style="display: flex; gap: 10px;">
+                    <a class="btn btn-primary" href="{% url 'download_literature_review_file' literature_review.id 1 %}">
+                        <i class="bi bi-download"></i> Download File 1
+                    </a>
+                    <a class="btn btn-primary" href="{% url 'download_literature_review_file' literature_review.id 2 %}">
+                        <i class="bi bi-download"></i> Download File 2
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="info-card">
+                <h5><i class="bi bi-upload"></i> {% if literature_review %}Replace{% else %}Upload{% endif %} Literature Review (PDF Files)</h5>
+                <p class="text-muted mb-3">Any group member can upload the Literature Review. Please upload exactly two PDF files.</p>
+                <form method="post" action="{% url 'literature_review_submission' %}" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="form-group-custom">
+                        <label for="file_1">File 1 (PDF)</label>
+                        <input type="file" class="form-control" id="file_1" name="file_1" accept="application/pdf,.pdf" required>
+                    </div>
+                    <div class="form-group-custom">
+                        <label for="file_2">File 2 (PDF)</label>
+                        <input type="file" class="form-control" id="file_2" name="file_2" accept="application/pdf,.pdf" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-cloud-upload"></i> {% if literature_review %}Update Literature Review{% else %}Upload Literature Review{% endif %}
+                    </button>
+                </form>
+            </div>
+            {% else %}
+            <div class="info-card">
+                <p style="color: #9ca3af; margin: 0;">You must be in a group to access Literature Review submission.</p>
+            </div>
+            {% endif %}
         </div>
 
         <!-- Evaluation Tab -->
@@ -1192,27 +1250,11 @@
             {% if sdd_submission %}
             <div class="info-card">
                 <h5 style="color: #86efac;"><i class="bi bi-check-circle"></i> Uploaded SDD</h5>
-                <p style="margin-bottom: 10px; color: #e5e7eb;"><strong>File:</strong> {{ sdd_submission.sdd_file.name|cut:'sdd_documents/' }}</p>
+                <p style="margin-bottom: 10px; color: #e5e7eb;"><strong>File:</strong> {{ sdd_submission.file.name|cut:'sdd/' }}</p>
                 <p style="margin-bottom: 10px; color: #e5e7eb;"><strong>Uploaded:</strong> {{ sdd_submission.uploaded_at|date:"M d, Y H:i" }}</p>
-                <p style="margin-bottom: 10px; color: #e5e7eb;"><strong>Status:</strong>
-                    {% if sdd_submission.review_status == 'rejected' %}
-                    <span class="status-badge danger">Rejected</span>
-                    {% elif sdd_submission.review_status == 'approved' %}
-                    <span class="status-badge success">Approved</span>
-                    {% else %}
-                    <span class="status-badge warning">Pending</span>
-                    {% endif %}
-                </p>
                 <a class="btn btn-primary" href="{% url 'download_sdd_submission' sdd_submission.id %}">
                     <i class="bi bi-download"></i> Download SDD
                 </a>
-
-                {% if sdd_submission.review_status == 'rejected' and sdd_submission.rejection_review %}
-                <div class="alert alert-danger mt-3" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); color: #fecaca;">
-                    <strong>Rejected Review:</strong><br>
-                    {{ sdd_submission.rejection_review|linebreaksbr }}
-                </div>
-                {% endif %}
             </div>
             {% endif %}
 

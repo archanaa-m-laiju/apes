@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 
-from .models import Abstract, CoordinatorApproval, Group, GroupMember, GroupRequest, GuideRequest, Notification, StudentProfile, FacultyProfile, GroupEvaluation, EvaluationFile, StudentEvaluation, Class, CoordinatorAssignment, ProjectReport, SRSSubmission, SDDSubmission
+from .models import Abstract, CoordinatorApproval, Group, GroupMember, GroupRequest, GuideRequest, Notification, StudentProfile, FacultyProfile, GroupEvaluation, EvaluationFile, StudentEvaluation, Class, CoordinatorAssignment, ProjectReport, SRSSubmission, SDDSubmission, LiteratureReview
 
 
 @admin.register(Class)
@@ -212,10 +212,18 @@ class SRSSubmissionAdmin(admin.ModelAdmin):
 
 @admin.register(SDDSubmission)
 class SDDSubmissionAdmin(admin.ModelAdmin):
-	list_display = ("group", "uploaded_by", "uploaded_at", "review_status", "rejected_by", "rejected_at")
-	search_fields = ("group__leader__username", "uploaded_by__username", "review_status")
-	list_filter = ("review_status", "uploaded_at")
-	readonly_fields = ("uploaded_at", "rejected_at")
+	list_display = ("group", "uploaded_at")
+	search_fields = ("group__leader__username",)
+	list_filter = ("uploaded_at",)
+	readonly_fields = ("uploaded_at",)
+
+
+@admin.register(LiteratureReview)
+class LiteratureReviewAdmin(admin.ModelAdmin):
+	list_display = ("group", "uploaded_by", "uploaded_at")
+	search_fields = ("group__leader__username", "uploaded_by__username")
+	list_filter = ("uploaded_at",)
+	readonly_fields = ("uploaded_at",)
 
 
 @admin.register(StudentEvaluation)

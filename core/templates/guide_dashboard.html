@@ -468,9 +468,6 @@
         <li><a href="#" class="tab-link active" data-tab="groups">
             <i class="bi bi-people-fill"></i> My Groups
         </a></li>
-        <li><a href="#" class="tab-link" data-tab="requests">
-            <i class="bi bi-inbox"></i> Guide Requests
-        </a></li>
         <li><a href="#" class="tab-link" data-tab="abstracts">
             <i class="bi bi-file-text"></i> Review Abstracts
         </a></li>
@@ -538,6 +535,88 @@
                                 </div>
                             {% endif %}
                         {% endfor %}
+                    {% endif %}
+
+                    <!-- Literature Review Section -->
+                    {% if item.literature_review %}
+                    <div class="mb-3 p-3" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 8px;">
+                        <h6 style="color: #a78bfa; margin-bottom: 8px;">📚 Literature Review</h6>
+                        <p style="color: #e5e7eb; margin: 0; font-size: 14px;">
+                            <strong>File 1:</strong> {{ item.literature_review.file_1.name|cut:'literature_review_documents/' }}<br>
+                            <strong>File 2:</strong> {{ item.literature_review.file_2.name|cut:'literature_review_documents/' }}<br>
+                            <strong>Uploaded by:</strong> {{ item.literature_review.uploaded_by.get_full_name|default:item.literature_review.uploaded_by.username }}<br>
+                            <strong>Uploaded:</strong> {{ item.literature_review.uploaded_at|date:"M d, Y H:i" }}
+                        </p>
+                        <div class="mt-2">
+                            <a href="{% url 'download_literature_review_file' item.literature_review.id 1 %}" class="btn btn-sm btn-primary me-2">Download File 1</a>
+                            <a href="{% url 'download_literature_review_file' item.literature_review.id 2 %}" class="btn btn-sm btn-primary">Download File 2</a>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="mb-3 p-3" style="background: rgba(107, 114, 128, 0.1); border: 1px solid rgba(107, 114, 128, 0.3); border-radius: 8px;">
+                        <h6 style="color: #9ca3af; margin-bottom: 8px;">📚 Literature Review</h6>
+                        <p style="color: #9ca3af; margin: 0; font-size: 14px;">Not submitted yet</p>
+                    </div>
+                    {% endif %}
+
+                    <!-- SRS Section -->
+                    {% if item.srs_submission %}
+                    <div class="mb-3 p-3" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px;">
+                        <h6 style="color: #3b82f6; margin-bottom: 8px;">📋 Software Requirements Specification (SRS)</h6>
+                        <p style="color: #e5e7eb; margin: 0; font-size: 14px;">
+                            <strong>File:</strong> {{ item.srs_submission.srs_file.name|cut:'srs_documents/' }}<br>
+                            <strong>Uploaded by:</strong> {{ item.srs_submission.uploaded_by.get_full_name|default:item.srs_submission.uploaded_by.username }}<br>
+                            <strong>Uploaded:</strong> {{ item.srs_submission.uploaded_at|date:"M d, Y H:i" }}<br>
+                            <strong>Status:</strong> 
+                            {% if item.srs_submission.review_status == 'approved' %}
+                                <span style="color: #86efac;">✅ Approved</span>
+                            {% elif item.srs_submission.review_status == 'rejected' %}
+                                <span style="color: #f87171;">❌ Rejected</span>
+                            {% else %}
+                                <span style="color: #fbbf24;">⏳ Pending Review</span>
+                            {% endif %}
+                        </p>
+                        <div class="mt-2">
+                            <a href="{% url 'download_srs_submission' item.srs_submission.id %}" class="btn btn-sm btn-primary me-2">Download SRS</a>
+                            {% if item.srs_submission.review_status == 'pending' %}
+                            <form method="post" action="{% url 'review_srs_submission' item.srs_submission.id %}" style="display: inline;">
+                                {% csrf_token %}
+                                <button type="submit" name="action" value="approve" class="btn btn-sm btn-success me-1">Approve</button>
+                                <button type="button" class="btn btn-sm btn-danger" onclick="showRejectModal('{{ item.srs_submission.id }}')">Reject</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        {% if item.srs_submission.review_status == 'rejected' and item.srs_submission.rejection_review %}
+                        <div class="mt-2 p-2" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px;">
+                            <strong style="color: #f87171;">Rejection Feedback:</strong>
+                            <p style="color: #e5e7eb; margin: 0.5rem 0 0;">{{ item.srs_submission.rejection_review }}</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <div class="mb-3 p-3" style="background: rgba(107, 114, 128, 0.1); border: 1px solid rgba(107, 114, 128, 0.3); border-radius: 8px;">
+                        <h6 style="color: #9ca3af; margin-bottom: 8px;">📋 Software Requirements Specification (SRS)</h6>
+                        <p style="color: #9ca3af; margin: 0; font-size: 14px;">Not submitted yet</p>
+                    </div>
+                    {% endif %}
+
+                    <!-- SDD Section -->
+                    {% if item.sdd_submission %}
+                    <div class="mb-3 p-3" style="background: rgba(244, 114, 182, 0.1); border: 1px solid rgba(244, 114, 182, 0.3); border-radius: 8px;">
+                        <h6 style="color: #f472b6; margin-bottom: 8px;">📄 Software Design Document (SDD)</h6>
+                        <p style="color: #e5e7eb; margin: 0; font-size: 14px;">
+                            <strong>File:</strong> {{ item.sdd_submission.file.name|cut:'sdd/' }}<br>
+                            <strong>Uploaded:</strong> {{ item.sdd_submission.uploaded_at|date:"M d, Y H:i" }}
+                        </p>
+                        <div class="mt-2">
+                            <a href="{% url 'download_sdd_submission' item.sdd_submission.id %}" class="btn btn-sm btn-primary">Download SDD</a>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="mb-3 p-3" style="background: rgba(107, 114, 128, 0.1); border: 1px solid rgba(107, 114, 128, 0.3); border-radius: 8px;">
+                        <h6 style="color: #9ca3af; margin-bottom: 8px;">📄 Software Design Document (SDD)</h6>
+                        <p style="color: #9ca3af; margin: 0; font-size: 14px;">Not submitted yet</p>
+                    </div>
                     {% endif %}
 
                     <!-- Evaluation Section -->
@@ -1082,50 +1161,7 @@
             {% else %}
                 <div class="info-card text-center" style="padding: 60px 20px;">
                     <h5 style="color: #9ca3af;">No Assigned Groups Yet</h5>
-                    <p style="color: #6b7280; margin-top: 12px;">You will see groups here once students send you guide requests and you accept them.</p>
-                </div>
-            {% endif %}
-        </div>
-
-        <!-- Requests Tab -->
-        <div id="requests" class="tab-content">
-            <h4 style="color: #fdba74; margin-bottom: 24px;">📨 Incoming Guide Requests</h4>
-            
-            {% if pending_requests %}
-                {% for request in pending_requests %}
-                <div class="request-card">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6 style="color: #e5e7eb; margin-bottom: 8px;">Group Leader: {{ request.group.leader.username }}</h6>
-                            {% if request.group.leader.student_profile %}
-                                <p style="color: #9ca3af; margin: 4px 0;">
-                                    <strong>Class:</strong> {{ request.group.leader.student_profile.student_class.name|default:"N/A" }}
-                                </p>
-                                <p style="color: #9ca3af; margin: 4px 0;">
-                                    <strong>Department:</strong> {{ request.group.leader.student_profile.department|default:"N/A" }}
-                                </p>
-                            {% endif %}
-                            <p style="color: #6b7280; margin-top: 8px; font-size: 14px;">
-                                <strong>Requested:</strong> {{ request.created_at|date:"M d, Y H:i" }}
-                            </p>
-                        </div>
-                        <form method="post" action="{% url 'guide_requests' %}" class="d-flex gap-2">
-                            {% csrf_token %}
-                            <input type="hidden" name="request_id" value="{{ request.id }}">
-                            <button type="submit" name="action" value="accept" class="btn btn-success btn-sm">
-                                ✓ Accept
-                            </button>
-                            <button type="submit" name="action" value="reject" class="btn btn-danger btn-sm">
-                                ✗ Reject
-                            </button>
-                        </form>
-                    </div>
-                </div>
-                {% endfor %}
-            {% else %}
-                <div class="info-card text-center" style="padding: 60px 20px;">
-                    <h5 style="color: #9ca3af;">No Pending Requests</h5>
-                    <p style="color: #6b7280; margin-top: 12px;">You have no pending guide requests at the moment.</p>
+                    <p style="color: #6b7280; margin-top: 12px;">No groups have been assigned to you yet. Coordinators assign guides to groups.</p>
                 </div>
             {% endif %}
         </div>
@@ -1370,4 +1406,39 @@
         }
     });
 </script>
+
+<!-- Rejection Modal for SRS -->
+<div class="modal fade" id="rejectModal" tabindex="-1" aria-labelledby="rejectModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content" style="background: #0d1117; border: 1px solid rgba(255, 255, 255, 0.2);">
+            <div class="modal-header">
+                <h5 class="modal-title" id="rejectModalLabel" style="color: #e5e7eb;">Reject SRS Submission</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(1);"></button>
+            </div>
+            <form id="rejectForm" method="post">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="rejection_review" class="form-label" style="color: #e5e7eb;">Rejection Feedback <span style="color: #f87171;">*</span></label>
+                        <textarea class="form-control" id="rejection_review" name="rejection_review" rows="4" 
+                            placeholder="Please provide detailed feedback explaining why the SRS is being rejected..."
+                            style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: #e5e7eb;" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" name="action" value="reject" class="btn btn-danger">Reject SRS</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function showRejectModal(submissionId) {
+        document.getElementById('rejectForm').action = `/mini-project/srs/review/${submissionId}/`;
+        new bootstrap.Modal(document.getElementById('rejectModal')).show();
+    }
+</script>
+
 {% endblock %}

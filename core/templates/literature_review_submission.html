@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .navbar { display: none !important; }
+    .container { max-width: 980px; margin-top: 30px; }
+    .report-card {
+        background: rgba(15, 23, 42, 0.92);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        border-radius: 14px;
+        padding: 24px;
+        color: #e5e7eb;
+        margin-bottom: 18px;
+    }
+    .report-title { color: #fdba74; margin-bottom: 12px; }
+    .muted { color: #9ca3af; }
+</style>
+
+<div class="report-card">
+    <h3 class="report-title">Literature Review</h3>
+    <p class="muted" style="margin-bottom: 0;">Group {{ group.id }} | Leader: {{ group.leader.username }}</p>
+</div>
+
+{% if literature_review %}
+<div class="report-card">
+    <h5 style="color: #86efac;">Uploaded Literature Review</h5>
+    <p style="margin-bottom: 10px;"><strong>File 1:</strong> {{ literature_review.file_1.name|cut:'literature_review_documents/' }}</p>
+    <p style="margin-bottom: 10px;"><strong>File 2:</strong> {{ literature_review.file_2.name|cut:'literature_review_documents/' }}</p>
+    <p style="margin-bottom: 10px;"><strong>Uploaded by:</strong> {{ literature_review.uploaded_by.get_full_name|default:literature_review.uploaded_by.username }}</p>
+    <p style="margin-bottom: 10px;"><strong>Uploaded:</strong> {{ literature_review.uploaded_at|date:"M d, Y H:i" }}</p>
+    <div style="display: flex; gap: 10px;">
+        <a class="btn btn-success btn-sm" href="{% url 'download_literature_review_file' literature_review.id 1 %}">Download File 1</a>
+        <a class="btn btn-success btn-sm" href="{% url 'download_literature_review_file' literature_review.id 2 %}">Download File 2</a>
+    </div>
+</div>
+{% endif %}
+
+{% if is_group_member %}
+<div class="report-card">
+    <h5 style="color: #93c5fd;">{% if literature_review %}Replace{% else %}Upload{% endif %} Literature Review (PDF Files)</h5>
+    <p class="muted mb-3">Please upload exactly two PDF files for the Literature Review submission.</p>
+    <form method="post" action="{% url 'literature_review_submission' %}" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="mb-3">
+            <label for="file_1" class="form-label">File 1 (PDF)</label>
+            <input type="file" class="form-control" id="file_1" name="file_1" accept="application/pdf,.pdf" required>
+        </div>
+        <div class="mb-3">
+            <label for="file_2" class="form-label">File 2 (PDF)</label>
+            <input type="file" class="form-control" id="file_2" name="file_2" accept="application/pdf,.pdf" required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">{% if literature_review %}Update Literature Review{% else %}Upload Literature Review{% endif %}</button>
+        <a href="{% url 'mini_project' %}" class="btn btn-outline-secondary btn-sm ms-2">Back</a>
+    </form>
+</div>
+{% else %}
+<div class="report-card">
+    <p class="muted mb-0">You must be a member of this group to upload Literature Review documents.</p>
+</div>
+{% endif %}
+{% endblock %}
