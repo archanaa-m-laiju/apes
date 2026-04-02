@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .panel {
+        background: rgba(15, 23, 42, 0.92);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        border-radius: 14px;
+        padding: 24px;
+        color: #e5e7eb;
+        margin-bottom: 18px;
+    }
+    .title {
+        color: #fdba74;
+        margin-bottom: 8px;
+        font-weight: 700;
+    }
+    .muted {
+        color: #9ca3af;
+    }
+</style>
+
+<div class="container" style="max-width: 900px; margin-top: 28px;">
+    <div class="panel">
+        <h3 class="title">Change Group Leader</h3>
+        <p class="muted" style="margin-bottom: 0;">
+            Group {{ group.id }}
+            {% if current_leader %}
+            | Current Leader: <strong style="color: #e5e7eb;">{{ current_leader.get_full_name|default:current_leader.username }}</strong>
+            {% endif %}
+        </p>
+    </div>
+
+    <div class="panel">
+        <form method="post" action="{% url 'change_group_leader' group.id %}">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label for="new_leader" class="form-label" style="font-weight: 600; color: #e5e7eb;">Select New Leader</label>
+                <select id="new_leader" name="new_leader" class="form-select" required>
+                    <option value="">Choose group member</option>
+                    {% for member in group_members %}
+                    <option value="{{ member.user.id }}" {% if current_leader and member.user.id == current_leader.id %}selected{% endif %}>
+                        {{ member.user.get_full_name|default:member.user.username }} ({{ member.user.username }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <button type="submit" class="btn btn-warning">Update Leader</button>
+                <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+
+    <div class="panel">
+        <h5 style="color: #93c5fd; margin-bottom: 12px;">Group Members</h5>
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered" style="color: #e5e7eb; border-color: rgba(148,163,184,0.25);">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Name</th>
+                        <th>Role</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for member in group_members %}
+                    <tr>
+                        <td>{{ member.user.username }}</td>
+                        <td>{{ member.user.get_full_name|default:"-" }}</td>
+                        <td>
+                            {% if current_leader and member.user.id == current_leader.id %}
+                            <span class="badge bg-success">Current Leader</span>
+                            {% else %}
+                            Member
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -52,6 +52,41 @@ def _ensure_active_role_for_dual_faculty(request, required_role):
 		return redirect("guide_dashboard" if active_role == "guide" else "coordinator_dashboard")
 	return None
 
+
+def _get_coordinator_role_for_group(user, group):
+	"""Return 1 or 2 when the user is assigned as a coordinator for the group, otherwise None."""
+	student_profile = getattr(group.leader, "student_profile", None)
+	student_class = getattr(student_profile, "student_class", None)
+	if not student_class:
+		return None
+	assignments = list(
+		CoordinatorAssignment.objects.filter(student_class=student_class)
+		.select_related("faculty")
+		.order_by("id")
+	)
+	for idx, assignment in enumerate(assignments, 1):
+		if assignment.faculty_id == user.id:
+			return idx
+	return None
+
+
+def _sync_document_review_status(document):
+	"""Synchronize the final review status from guide/coordinator role statuses."""
+	if not document:
+		return
+	statuses = [
+		getattr(document, "guide_status", None),
+		getattr(document, "coordinator1_status", None),
+		getattr(document, "coordinator2_status", None),
+	]
+	status_set = set(statuses)
+	if any(status == document.STATUS_REJECTED for status in statuses):
+		document.review_status = document.STATUS_REJECTED
+	elif all(status == document.STATUS_APPROVED for status in statuses):
+		document.review_status = document.STATUS_APPROVED
+	else:
+		document.review_status = document.STATUS_PENDING
+
 # Optional recommended overload protection
 MAX_GROUPS_PER_GUIDE = 6
 
@@ -368,6 +403,15 @@ def mini_project(request):
 	project_report = ProjectReport.objects.filter(group=group).first() if group else None
 	first_complete = _is_stage_completed_for_group(group, "first") if group else False
 	second_complete = _is_stage_completed_for_group(group, "second") if group else False
+	can_submit_zeroth = bool(
+		group
+		and selected_topic
+		and srs_submission
+		and srs_submission.review_status == SRSSubmission.STATUS_APPROVED
+		and sdd_submission
+		and getattr(sdd_submission, "sdd_file", None)
+		and sdd_submission.review_status == SDDSubmission.STATUS_APPROVED
+	)
 
 	# Get evaluation files and evaluations for the group
 	evaluation_files = {}
@@ -420,8 +464,9 @@ def mini_project(request):
 		"srs_submission": srs_submission,
 		"sdd_submission": sdd_submission,
 		"literature_review": literature_review,
-		"can_submit_srs": bool(group and group.leader_id == request.user.id and literature_review and literature_review.guide_approved),
+		"can_submit_srs": bool(group and group.leader_id == request.user.id and literature_review and literature_review.review_status == LiteratureReview.STATUS_APPROVED),
 		"can_submit_sdd": bool(group and group.leader_id == request.user.id and srs_submission and srs_submission.review_status == SRSSubmission.STATUS_APPROVED),
+		"can_submit_zeroth": can_submit_zeroth,
 		"assigned_guide": assigned_guide,
 		"selected_topic": selected_topic,
 		"evaluation_files": evaluation_files,
@@ -525,14 +570,14 @@ def srs_submission(request):
 
 	srs_submission = SRSSubmission.objects.filter(group=group).first()
 	literature_review = LiteratureReview.objects.filter(group=group).first()
-	can_submit_srs = group.leader_id == request.user.id and literature_review and literature_review.guide_approved
+	can_submit_srs = group.leader_id == request.user.id and literature_review and literature_review.review_status == LiteratureReview.STATUS_APPROVED
 
 	if request.method == "POST":
 		if group.leader_id != request.user.id:
 			messages.error(request, "Only the group leader can upload the SRS document.")
 			return redirect("srs_submission")
-		if not literature_review or not literature_review.guide_approved:
-			messages.error(request, "SRS upload is allowed only after Literature Review completion.")
+		if not literature_review or literature_review.review_status != LiteratureReview.STATUS_APPROVED:
+			messages.error(request, "SRS upload is allowed only after Literature Review final approval.")
 			return redirect("srs_submission")
 
 		srs_file = request.FILES.get("srs_file")
@@ -557,6 +602,12 @@ def srs_submission(request):
 			srs_submission.uploaded_by = request.user
 			srs_submission.uploaded_at = timezone.now()
 			srs_submission.review_status = SRSSubmission.STATUS_PENDING
+			srs_submission.guide_status = SRSSubmission.STATUS_PENDING
+			srs_submission.coordinator1_status = SRSSubmission.STATUS_PENDING
+			srs_submission.coordinator2_status = SRSSubmission.STATUS_PENDING
+			srs_submission.guide_review = ""
+			srs_submission.coordinator1_review = ""
+			srs_submission.coordinator2_review = ""
 			srs_submission.rejection_review = ""
 			srs_submission.rejected_by = None
 			srs_submission.rejected_at = None
@@ -568,6 +619,9 @@ def srs_submission(request):
 				srs_file=srs_file,
 				uploaded_by=request.user,
 				review_status=SRSSubmission.STATUS_PENDING,
+				guide_status=SRSSubmission.STATUS_PENDING,
+				coordinator1_status=SRSSubmission.STATUS_PENDING,
+				coordinator2_status=SRSSubmission.STATUS_PENDING,
 			)
 			messages.success(request, "SRS document uploaded successfully.")
 		return redirect("srs_submission")
@@ -577,7 +631,7 @@ def srs_submission(request):
 		"srs_submission": srs_submission,
 		"is_leader": group.leader_id == request.user.id,
 		"can_submit_srs": can_submit_srs,
-		"literature_review_complete": literature_review and literature_review.guide_approved,
+		"literature_review_complete": literature_review and literature_review.review_status == LiteratureReview.STATUS_APPROVED,
 	}
 	return render(request, "srs_submission.html", context)
 
@@ -602,7 +656,7 @@ def sdd_submission(request):
 			messages.error(request, "Only the group leader can upload the SDD document.")
 			return redirect("sdd_submission")
 		if not srs_submission or srs_submission.review_status != SRSSubmission.STATUS_APPROVED:
-			messages.error(request, "SDD upload is allowed only after the SRS is approved.")
+			messages.error(request, "SDD upload is allowed only after the SRS is finally approved.")
 			return redirect("sdd_submission")
 
 		sdd_file = request.FILES.get("sdd_file")
@@ -621,15 +675,30 @@ def sdd_submission(request):
 			return redirect("sdd_submission")
 
 		if sdd_submission:
-			if sdd_submission.file:
-				sdd_submission.file.delete(save=False)
-			sdd_submission.file = sdd_file
+			if sdd_submission.sdd_file:
+				sdd_submission.sdd_file.delete(save=False)
+			sdd_submission.sdd_file = sdd_file
+			sdd_submission.uploaded_at = timezone.now()
+			sdd_submission.review_status = SDDSubmission.STATUS_PENDING
+			sdd_submission.guide_status = SDDSubmission.STATUS_PENDING
+			sdd_submission.coordinator1_status = SDDSubmission.STATUS_PENDING
+			sdd_submission.coordinator2_status = SDDSubmission.STATUS_PENDING
+			sdd_submission.guide_review = ""
+			sdd_submission.coordinator1_review = ""
+			sdd_submission.coordinator2_review = ""
+			sdd_submission.rejection_review = ""
+			sdd_submission.rejected_by = None
+			sdd_submission.rejected_at = None
 			sdd_submission.save()
 			messages.success(request, "SDD document updated successfully.")
 		else:
 			SDDSubmission.objects.create(
 				group=group,
-				file=sdd_file,
+				sdd_file=sdd_file,
+				review_status=SDDSubmission.STATUS_PENDING,
+				guide_status=SDDSubmission.STATUS_PENDING,
+				coordinator1_status=SDDSubmission.STATUS_PENDING,
+				coordinator2_status=SDDSubmission.STATUS_PENDING,
 			)
 			messages.success(request, "SDD document uploaded successfully.")
 		return redirect("sdd_submission")
@@ -693,7 +762,17 @@ def literature_review_submission(request):
 			literature_review.file_2 = file_2
 			literature_review.uploaded_by = request.user
 			literature_review.uploaded_at = timezone.now()
-			literature_review.guide_approved = True  # Mark as completed
+			literature_review.guide_approved = False
+			literature_review.review_status = LiteratureReview.STATUS_PENDING
+			literature_review.guide_status = LiteratureReview.STATUS_PENDING
+			literature_review.coordinator1_status = LiteratureReview.STATUS_PENDING
+			literature_review.coordinator2_status = LiteratureReview.STATUS_PENDING
+			literature_review.guide_review = ""
+			literature_review.coordinator1_review = ""
+			literature_review.coordinator2_review = ""
+			literature_review.rejection_review = ""
+			literature_review.rejected_by = None
+			literature_review.rejected_at = None
 			literature_review.save()
 			messages.success(request, "Literature Review documents updated successfully.")
 		else:
@@ -703,7 +782,11 @@ def literature_review_submission(request):
 				file_1=file_1,
 				file_2=file_2,
 				uploaded_by=request.user,
-				guide_approved=True,  # Mark as completed
+				guide_approved=False,
+				review_status=LiteratureReview.STATUS_PENDING,
+				guide_status=LiteratureReview.STATUS_PENDING,
+				coordinator1_status=LiteratureReview.STATUS_PENDING,
+				coordinator2_status=LiteratureReview.STATUS_PENDING,
 			)
 			messages.success(request, "Literature Review documents uploaded successfully.")
 		return redirect("literature_review_submission")
@@ -764,45 +847,138 @@ def download_sdd_submission(request, submission_id):
 	allowed = (group_for_user == group) or (_is_guide(request.user) and _get_accepted_guide_for_group(group) == request.user) or _is_coordinator(request.user)
 	if not allowed:
 		return HttpResponseForbidden("You do not have permission to download this SDD document.")
-	return FileResponse(submission.file.open("rb"), as_attachment=True, filename=os.path.basename(submission.file.name))
+	return FileResponse(submission.sdd_file.open("rb"), as_attachment=True, filename=os.path.basename(submission.sdd_file.name))
+
+
+def _process_document_review(request, submission, role_field, template_dashboard):
+	"""Apply an approve/reject action for a role-specific document review."""
+	action = request.POST.get("action")
+	feedback = request.POST.get("rejection_review", "").strip()
+	review_field = role_field.replace("_status", "_review")
+	if submission.review_status in (submission.STATUS_APPROVED, submission.STATUS_REJECTED):
+		return False, "This submission has already been finalized."
+	if getattr(submission, role_field) != submission.STATUS_PENDING:
+		return False, "You have already reviewed this submission."
+
+	if action == "approve":
+		setattr(submission, role_field, submission.STATUS_APPROVED)
+		setattr(submission, review_field, feedback)
+		if hasattr(submission, "guide_approved"):
+			submission.guide_approved = False
+		message = "Submission approved."
+	elif action == "reject":
+		if not feedback:
+			return False, "Feedback is required when rejecting this submission."
+		setattr(submission, role_field, submission.STATUS_REJECTED)
+		setattr(submission, review_field, feedback)
+		submission.review_status = submission.STATUS_REJECTED
+		submission.rejection_review = feedback
+		submission.rejected_by = request.user
+		submission.rejected_at = timezone.now()
+		if hasattr(submission, "guide_approved"):
+			submission.guide_approved = False
+		message = "Submission rejected."
+	else:
+		return False, "Invalid review action."
+
+	_sync_document_review_status(submission)
+	if hasattr(submission, "guide_approved"):
+		submission.guide_approved = submission.review_status == submission.STATUS_APPROVED
+	submission.save()
+	return True, message
 
 
 @login_required
 def review_srs_submission(request, submission_id):
-	if not _is_guide(request.user):
-		return HttpResponseForbidden("Only guides can review SRS submissions.")
 	if request.method != "POST":
 		return redirect("guide_dashboard")
 
 	submission = get_object_or_404(SRSSubmission, id=submission_id)
-	# Check if the user is the assigned guide for this group
-	if submission.group.guide != request.user:
-		messages.error(request, "You are not authorized to review this submission.")
-		return redirect("guide_dashboard")
-
-	action = request.POST.get("action")
-	feedback = request.POST.get("rejection_review", "").strip()
-	if action == "approve":
-		submission.review_status = SRSSubmission.STATUS_APPROVED
-		submission.rejection_review = ""
-		submission.rejected_by = None
-		submission.rejected_at = None
-		messages.success(request, "SRS approved.")
-	elif action == "reject":
-		if not feedback:
-			messages.error(request, "Feedback is required when rejecting SRS.")
-			return redirect("guide_dashboard")
-		submission.review_status = SRSSubmission.STATUS_REJECTED
-		submission.rejection_review = feedback
-		submission.rejected_by = request.user
-		submission.rejected_at = timezone.now()
-		messages.info(request, "SRS rejected.")
+	role_field = None
+	if _is_guide(request.user) and submission.group.guide == request.user:
+		role_field = "guide_status"
+		redirect_name = "guide_dashboard"
+	elif _is_coordinator(request.user):
+		role = _get_coordinator_role_for_group(request.user, submission.group)
+		if role == 1:
+			role_field = "coordinator1_status"
+		elif role == 2:
+			role_field = "coordinator2_status"
+		redirect_name = "coordinator_dashboard"
+		if not role_field:
+			messages.error(request, "You are not authorized to review this submission.")
+			return redirect("coordinator_dashboard")
 	else:
-		messages.error(request, "Invalid SRS review action.")
-		return redirect("guide_dashboard")
+		return HttpResponseForbidden("Only guides or coordinators can review SRS submissions.")
 
-	submission.save()
-	return redirect("guide_dashboard")
+	updated, message = _process_document_review(request, submission, role_field, redirect_name)
+	if updated:
+		messages.success(request, message)
+	else:
+		messages.error(request, message)
+	return redirect(redirect_name)
+
+
+@login_required
+def review_literature_review(request, submission_id):
+	if request.method != "POST":
+		return redirect("guide_dashboard" if _is_guide(request.user) else "coordinator_dashboard")
+
+	submission = get_object_or_404(LiteratureReview, id=submission_id)
+	role_field = None
+	redirect_name = "guide_dashboard"
+	if _is_guide(request.user) and submission.group.guide == request.user:
+		role_field = "guide_status"
+	elif _is_coordinator(request.user):
+		role = _get_coordinator_role_for_group(request.user, submission.group)
+		if role == 1:
+			role_field = "coordinator1_status"
+		elif role == 2:
+			role_field = "coordinator2_status"
+		redirect_name = "coordinator_dashboard"
+		if not role_field:
+			messages.error(request, "You are not authorized to review this submission.")
+			return redirect("coordinator_dashboard")
+	else:
+		return HttpResponseForbidden("Only guides or coordinators can review Literature Review submissions.")
+
+	updated, message = _process_document_review(request, submission, role_field, redirect_name)
+	if updated:
+		messages.success(request, message)
+	else:
+		messages.error(request, message)
+	return redirect(redirect_name)
+
+
+@login_required
+def review_sdd_submission(request, submission_id):
+	if request.method != "POST":
+		return redirect("guide_dashboard" if _is_guide(request.user) else "coordinator_dashboard")
+
+	submission = get_object_or_404(SDDSubmission, id=submission_id)
+	role_field = None
+	redirect_name = "guide_dashboard"
+	if _is_guide(request.user) and submission.group.guide == request.user:
+		role_field = "guide_status"
+	elif _is_coordinator(request.user):
+		role = _get_coordinator_role_for_group(request.user, submission.group)
+		if role == 1:
+			role_field = "coordinator1_status"
+		elif role == 2:
+			role_field = "coordinator2_status"
+		redirect_name = "coordinator_dashboard"
+		if not role_field:
+			messages.error(request, "You are not authorized to review this submission.")
+			return redirect("coordinator_dashboard")
+	else:
+		return HttpResponseForbidden("Only guides or coordinators can review SDD submissions.")
+
+	updated, message = _process_document_review(request, submission, role_field, redirect_name)
+	if updated:
+		messages.success(request, message)
+	else:
+		messages.error(request, message)
+	return redirect(redirect_name)
 
 
 @login_required
@@ -2054,6 +2230,20 @@ def upload_evaluation_file(request, stage):
 	if not group:
 		messages.error(request, "You must be in a group to upload files.")
 		return redirect("mini_project")
+
+	if stage == "zeroth":
+		srs_submission = SRSSubmission.objects.filter(group=group).first()
+		sdd_submission = SDDSubmission.objects.filter(group=group).first()
+		if not (
+			Abstract.objects.filter(group=group, is_final_approved=True).exists()
+			and srs_submission
+			and srs_submission.review_status == SRSSubmission.STATUS_APPROVED
+			and sdd_submission
+			and getattr(sdd_submission, "sdd_file", None)
+			and sdd_submission.review_status == SDDSubmission.STATUS_APPROVED
+		):
+			messages.error(request, "Zeroth Evaluation unlocks only after the abstract, SRS, and SDD are completed.")
+			return redirect("mini_project")
 
 	if request.method == "POST" and request.FILES.get("file"):
 		uploaded_file = request.FILES["file"]

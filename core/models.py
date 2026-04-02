@@ -372,6 +372,12 @@ class SRSSubmission(models.Model):
 	uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="uploaded_srs_documents")
 	uploaded_at = models.DateTimeField(auto_now_add=True)
 	review_status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_PENDING)
+	guide_status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_PENDING)
+	coordinator1_status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_PENDING)
+	coordinator2_status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_PENDING)
+	guide_review = models.TextField(blank=True)
+	coordinator1_review = models.TextField(blank=True)
+	coordinator2_review = models.TextField(blank=True)
 	rejection_review = models.TextField(blank=True)
 	rejected_by = models.ForeignKey(
 		User,
@@ -385,28 +391,90 @@ class SRSSubmission(models.Model):
 	def __str__(self):
 		return f"SRS Submission - Group {self.group_id}"
 
+	@property
+	def is_final_approved(self):
+		return self.review_status == self.STATUS_APPROVED
+
 
 class SDDSubmission(models.Model):
 	"""Student SDD submission."""
+	STATUS_PENDING = "pending"
+	STATUS_APPROVED = "approved"
+	STATUS_REJECTED = "rejected"
+	STATUS_CHOICES = [
+		(STATUS_PENDING, "Pending"),
+		(STATUS_APPROVED, "Approved"),
+		(STATUS_REJECTED, "Rejected"),
+	]
+
 	group = models.OneToOneField(Group, on_delete=models.CASCADE, related_name="sdd_submission")
-	file = models.FileField(upload_to="sdd/", null=True, blank=True)
+	sdd_file = models.FileField(upload_to="sdd_documents/", null=True, blank=True)
 	uploaded_at = models.DateTimeField(auto_now=True)
+	review_status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_PENDING)
+	guide_status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_PENDING)
+	coordinator1_status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_PENDING)
+	coordinator2_status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_PENDING)
+	guide_review = models.TextField(blank=True)
+	coordinator1_review = models.TextField(blank=True)
+	coordinator2_review = models.TextField(blank=True)
+	rejection_review = models.TextField(blank=True)
+	rejected_by = models.ForeignKey(
+		User,
+		null=True,
+		blank=True,
+		on_delete=models.SET_NULL,
+		related_name="rejected_sdd_submissions",
+	)
+	rejected_at = models.DateTimeField(null=True, blank=True)
 
 	def __str__(self):
 		return f"SDD Submission - Group {self.group_id}"
 
+	@property
+	def is_final_approved(self):
+		return self.review_status == self.STATUS_APPROVED
+
 
 class LiteratureReview(models.Model):
 	"""Literature Review submission with two PDF files per group."""
+	STATUS_PENDING = "pending"
+	STATUS_APPROVED = "approved"
+	STATUS_REJECTED = "rejected"
+	STATUS_CHOICES = [
+		(STATUS_PENDING, "Pending"),
+		(STATUS_APPROVED, "Approved"),
+		(STATUS_REJECTED, "Rejected"),
+	]
+
 	group = models.OneToOneField(Group, on_delete=models.CASCADE, related_name="literature_review")
 	file_1 = models.FileField(upload_to="literature_review_documents/")
 	file_2 = models.FileField(upload_to="literature_review_documents/")
 	uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="uploaded_literature_reviews")
 	uploaded_at = models.DateTimeField(auto_now_add=True)
 	guide_approved = models.BooleanField(default=False)
+	review_status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_PENDING)
+	guide_status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_PENDING)
+	coordinator1_status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_PENDING)
+	coordinator2_status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_PENDING)
+	guide_review = models.TextField(blank=True)
+	coordinator1_review = models.TextField(blank=True)
+	coordinator2_review = models.TextField(blank=True)
+	rejection_review = models.TextField(blank=True)
+	rejected_by = models.ForeignKey(
+		User,
+		null=True,
+		blank=True,
+		on_delete=models.SET_NULL,
+		related_name="rejected_literature_reviews",
+	)
+	rejected_at = models.DateTimeField(null=True, blank=True)
 
 	def __str__(self):
 		return f"Literature Review - Group {self.group_id}"
+
+	@property
+	def is_final_approved(self):
+		return self.review_status == self.STATUS_APPROVED
 
 
 class StudentEvaluation(models.Model):

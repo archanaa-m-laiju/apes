@@ -545,12 +545,41 @@
                             <strong>File 1:</strong> {{ item.literature_review.file_1.name|cut:'literature_review_documents/' }}<br>
                             <strong>File 2:</strong> {{ item.literature_review.file_2.name|cut:'literature_review_documents/' }}<br>
                             <strong>Uploaded by:</strong> {{ item.literature_review.uploaded_by.get_full_name|default:item.literature_review.uploaded_by.username }}<br>
-                            <strong>Uploaded:</strong> {{ item.literature_review.uploaded_at|date:"M d, Y H:i" }}
+                            <strong>Uploaded:</strong> {{ item.literature_review.uploaded_at|date:"M d, Y H:i" }}<br>
+                            <strong>Status:</strong>
+                            {% if item.literature_review.review_status == 'approved' %}
+                                <span style="color: #86efac;">✅ Final Approved</span>
+                            {% elif item.literature_review.review_status == 'rejected' %}
+                                <span style="color: #f87171;">❌ Rejected</span>
+                            {% else %}
+                                <span style="color: #fbbf24;">⏳ Pending Final Approval</span>
+                            {% endif %}
                         </p>
                         <div class="mt-2">
                             <a href="{% url 'download_literature_review_file' item.literature_review.id 1 %}" class="btn btn-sm btn-primary me-2">Download File 1</a>
                             <a href="{% url 'download_literature_review_file' item.literature_review.id 2 %}" class="btn btn-sm btn-primary">Download File 2</a>
                         </div>
+                        <div class="mt-2">
+                            <small style="color: #c4b5fd;">Guide Review: {% if item.literature_review.guide_status == 'approved' %}Approved{% elif item.literature_review.guide_status == 'rejected' %}Rejected{% else %}Pending{% endif %}</small>
+                        </div>
+                        {% if item.literature_review.guide_status == 'pending' and item.literature_review.review_status == 'pending' %}
+                        <form method="post" action="{% url 'review_literature_review' item.literature_review.id %}" class="mt-3">
+                            {% csrf_token %}
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button type="submit" name="action" value="approve" class="btn btn-success btn-sm">Approve Literature Review</button>
+                                <button type="submit" name="action" value="reject" class="btn btn-danger btn-sm">Reject Literature Review</button>
+                            </div>
+                            <div class="form-group mt-2">
+                                <textarea name="rejection_review" class="form-control form-control-sm" rows="3" placeholder="Review message (required for reject, optional for approve)"></textarea>
+                            </div>
+                        </form>
+                        {% endif %}
+                        {% if item.literature_review.review_status == 'rejected' and item.literature_review.rejection_review %}
+                        <div class="alert alert-danger mt-2" style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); color: #fecaca;">
+                            <strong>Rejection Feedback:</strong><br>
+                            {{ item.literature_review.rejection_review|linebreaksbr }}
+                        </div>
+                        {% endif %}
                     </div>
                     {% else %}
                     <div class="mb-3 p-3" style="background: rgba(107, 114, 128, 0.1); border: 1px solid rgba(107, 114, 128, 0.3); border-radius: 8px;">
@@ -575,14 +604,27 @@
                             {% else %}
                                 <span style="color: #fbbf24;">⏳ Pending Review</span>
                             {% endif %}
+                            <br><strong>Guide Message:</strong>
+                            {% if item.srs_submission.guide_review %}
+                                <span style="color: #e5e7eb;">{{ item.srs_submission.guide_review }}</span>
+                            {% elif item.srs_submission.guide_status == 'pending' %}
+                                <span style="color: #fbbf24;">Waiting for review message</span>
+                            {% else %}
+                                <span style="color: #9ca3af;">No message provided</span>
+                            {% endif %}
                         </p>
                         <div class="mt-2">
                             <a href="{% url 'download_srs_submission' item.srs_submission.id %}" class="btn btn-sm btn-primary me-2">Download SRS</a>
-                            {% if item.srs_submission.review_status == 'pending' %}
-                            <form method="post" action="{% url 'review_srs_submission' item.srs_submission.id %}" style="display: inline;">
+                            {% if item.srs_submission.guide_status == 'pending' and item.srs_submission.review_status == 'pending' %}
+                            <form method="post" action="{% url 'review_srs_submission' item.srs_submission.id %}" class="mt-2">
                                 {% csrf_token %}
-                                <button type="submit" name="action" value="approve" class="btn btn-sm btn-success me-1">Approve</button>
-                                <button type="button" class="btn btn-sm btn-danger" onclick="showRejectModal('{{ item.srs_submission.id }}')">Reject</button>
+                                <div class="d-flex gap-2 flex-wrap">
+                                    <button type="submit" name="action" value="approve" class="btn btn-sm btn-success">Approve</button>
+                                    <button type="submit" name="action" value="reject" class="btn btn-sm btn-danger">Reject</button>
+                                </div>
+                                <div class="form-group mt-2">
+                                    <textarea name="rejection_review" class="form-control form-control-sm" rows="3" placeholder="Review message (required for reject, optional for approve)"></textarea>
+                                </div>
                             </form>
                             {% endif %}
                         </div>
@@ -605,12 +647,46 @@
                     <div class="mb-3 p-3" style="background: rgba(244, 114, 182, 0.1); border: 1px solid rgba(244, 114, 182, 0.3); border-radius: 8px;">
                         <h6 style="color: #f472b6; margin-bottom: 8px;">📄 Software Design Document (SDD)</h6>
                         <p style="color: #e5e7eb; margin: 0; font-size: 14px;">
-                            <strong>File:</strong> {{ item.sdd_submission.file.name|cut:'sdd/' }}<br>
-                            <strong>Uploaded:</strong> {{ item.sdd_submission.uploaded_at|date:"M d, Y H:i" }}
+                            <strong>File:</strong> {{ item.sdd_submission.sdd_file.name|cut:'sdd_documents/' }}<br>
+                            <strong>Uploaded:</strong> {{ item.sdd_submission.uploaded_at|date:"M d, Y H:i" }}<br>
+                            <strong>Status:</strong>
+                            {% if item.sdd_submission.review_status == 'approved' %}
+                                <span style="color: #86efac;">✅ Final Approved</span>
+                            {% elif item.sdd_submission.review_status == 'rejected' %}
+                                <span style="color: #f87171;">❌ Rejected</span>
+                            {% else %}
+                                <span style="color: #fbbf24;">⏳ Pending Final Approval</span>
+                            {% endif %}
+                            <br><strong>Guide Message:</strong>
+                            {% if item.sdd_submission.guide_review %}
+                                <span style="color: #e5e7eb;">{{ item.sdd_submission.guide_review }}</span>
+                            {% elif item.sdd_submission.guide_status == 'pending' %}
+                                <span style="color: #fbbf24;">Waiting for review message</span>
+                            {% else %}
+                                <span style="color: #9ca3af;">No message provided</span>
+                            {% endif %}
                         </p>
                         <div class="mt-2">
                             <a href="{% url 'download_sdd_submission' item.sdd_submission.id %}" class="btn btn-sm btn-primary">Download SDD</a>
                         </div>
+                        {% if item.sdd_submission.guide_status == 'pending' and item.sdd_submission.review_status == 'pending' %}
+                        <form method="post" action="{% url 'review_sdd_submission' item.sdd_submission.id %}" class="mt-3">
+                            {% csrf_token %}
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button type="submit" name="action" value="approve" class="btn btn-success btn-sm">Approve SDD</button>
+                                <button type="submit" name="action" value="reject" class="btn btn-danger btn-sm">Reject SDD</button>
+                            </div>
+                            <div class="form-group mt-2">
+                                <textarea name="rejection_review" class="form-control form-control-sm" rows="3" placeholder="Review message (required for reject, optional for approve)"></textarea>
+                            </div>
+                        </form>
+                        {% endif %}
+                        {% if item.sdd_submission.review_status == 'rejected' and item.sdd_submission.rejection_review %}
+                        <div class="alert alert-danger mt-2" style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); color: #fecaca;">
+                            <strong>Rejection Feedback:</strong><br>
+                            {{ item.sdd_submission.rejection_review|linebreaksbr }}
+                        </div>
+                        {% endif %}
                     </div>
                     {% else %}
                     <div class="mb-3 p-3" style="background: rgba(107, 114, 128, 0.1); border: 1px solid rgba(107, 114, 128, 0.3); border-radius: 8px;">

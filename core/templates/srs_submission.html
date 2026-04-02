@@ -31,10 +31,19 @@
         {% if srs_submission.review_status == 'rejected' %}
         <span class="text-danger">Rejected</span>
         {% elif srs_submission.review_status == 'approved' %}
-        <span class="text-success">Approved</span>
+        <span class="text-success">Final Approved</span>
         {% else %}
-        <span class="text-warning">Pending</span>
+        <span class="text-warning">Pending Final Approval</span>
         {% endif %}
+    </p>
+    <p style="margin-bottom: 8px;"><strong>Guide Message:</strong>
+        {% if srs_submission.guide_review %}{{ srs_submission.guide_review }}{% elif srs_submission.guide_status == 'pending' %}<span class="text-warning">Waiting for review message</span>{% else %}<span class="muted">No message provided</span>{% endif %}
+    </p>
+    <p style="margin-bottom: 8px;"><strong>Coordinator 1 Message:</strong>
+        {% if srs_submission.coordinator1_review %}{{ srs_submission.coordinator1_review }}{% elif srs_submission.coordinator1_status == 'pending' %}<span class="text-warning">Waiting for review message</span>{% else %}<span class="muted">No message provided</span>{% endif %}
+    </p>
+    <p style="margin-bottom: 10px;"><strong>Coordinator 2 Message:</strong>
+        {% if srs_submission.coordinator2_review %}{{ srs_submission.coordinator2_review }}{% elif srs_submission.coordinator2_status == 'pending' %}<span class="text-warning">Waiting for review message</span>{% else %}<span class="muted">No message provided</span>{% endif %}
     </p>
     <a class="btn btn-success btn-sm" href="{% url 'download_srs_submission' srs_submission.id %}">Download SRS</a>
 
